@@ -30,13 +30,13 @@ jobs:
       - name: Install Inno Setup if needed
         shell: pwsh
         run: |
-          if (!(Test-Path "\${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
             choco install innosetup --yes --no-progress
           }
 
       - name: Build installer
         shell: pwsh
-        run: '& "\${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KeyRemapper.iss"'
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KeyRemapper.iss"'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -47,7 +47,7 @@ jobs:
       - name: Publish v1.1.0
         shell: pwsh
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view v1.1.0 *> $null
           if ($LASTEXITCODE -ne 0) {
