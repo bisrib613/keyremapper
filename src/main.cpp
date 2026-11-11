@@ -534,10 +534,12 @@ static void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
  RECT r=d->rcItem;
  bool primary=d->CtlID==ID_ADD;
  bool pressed=(d->itemState&ODS_SELECTED)!=0;
+ bool hot=(d->itemState&ODS_HOTLIGHT)!=0;
  bool disabled=(d->itemState&ODS_DISABLED)!=0;
  COLORREF fill=primary?C_TEXT:C_CONTROL;
  COLORREF text=primary?C_BG:C_TEXT;
- if(pressed) fill=primary?C_MUTED:C_HOVER;
+ if(hot && !pressed) fill=primary?RGB(230,230,230):C_HOVER;
+ if(pressed) fill=primary?C_MUTED:RGB(58,58,58);
  if(disabled) { fill=C_SURFACE; text=C_MUTED; }
 
  HBRUSH brush=CreateSolidBrush(fill);
@@ -748,8 +750,22 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
 
   case WM_GETMINMAXINFO: {
    auto* info=reinterpret_cast<MINMAXINFO*>(l);
-   info->ptMinTrackSize.x=800;
-   info->ptMinTrackSize.y=620;
+   info->ptMinTrackSize.x=860;
+   info->ptMinTrackSize.y=650;
+   return 0;
+  }
+
+  case WM_PAINT: {
+   PAINTSTRUCT ps{};
+   HDC dc=BeginPaint(h,&ps);
+   RECT client{};GetClientRect(h,&client);
+   HPEN pen=CreatePen(PS_SOLID,1,C_BORDER);
+   HGDIOBJ oldPen=SelectObject(dc,pen);
+   MoveToEx(dc,24,84,nullptr);LineTo(dc,client.right-24,84);
+   MoveToEx(dc,24,client.bottom-70,nullptr);LineTo(dc,client.right-24,client.bottom-70);
+   SelectObject(dc,oldPen);
+   DeleteObject(pen);
+   EndPaint(h,&ps);
    return 0;
   }
 
@@ -773,7 +789,12 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    HDC dc=(HDC)w; HWND control=(HWND)l;
    int id=GetDlgCtrlID(control);
    SetBkMode(dc,TRANSPARENT);
-   SetTextColor(dc,id==ID_TITLE?C_TEXT:C_MUTED);
+   if(id==ID_TITLE || id==ID_SECTION) SetTextColor(dc,C_TEXT);
+   else SetTextColor(dc,C_MUTED);
+   if(id==ID_EMPTY) {
+    SetBkColor(dc,C_SURFACE);
+    return (LRESULT)gBrushSurface;
+   }
    return (LRESULT)gBrushBg;
   }
 
@@ -887,6 +908,9 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_DESTROY:
    Save();
    Unhook();
+   if(gIconLarge) DestroyIcon(gIconLarge);
+   if(gIconSmall) DestroyIcon(gIconSmall);
+   gIconLarge=gIconSmall=nullptr;
    if(gFontBody) DeleteObject(gFontBody);
    if(gFontSmall) DeleteObject(gFontSmall);
    if(gFontTitle) DeleteObject(gFontTitle);
@@ -1021,9 +1045,21 @@ static int SelfTest() {
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
  INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);SetProcessDPIAware();Load();
- WNDCLASSEXW wc{sizeof(wc)};wc.hInstance=hi;wc.lpfnWndProc=WndProc;wc.lpszClassName=L"KRNative";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
- wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);wc.hbrBackground=CreateSolidBrush(C_BG);RegisterClassExW(&wc);
+
+ gIconLarge=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,32,32,LR_DEFAULTCOLOR);
+ gIconSmall=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,16,16,LR_DEFAULTCOLOR);
+
+ WNDCLASSEXW wc{sizeof(wc)};
+ wc.hInstance=hi;wc.lpfnWndProc=WndProc;wc.lpszClassName=L"KRNative";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+ wc.hIcon=gIconLarge?gIconLarge:LoadIconW(nullptr,IDI_APPLICATION);
+ wc.hIconSm=gIconSmall?gIconSmall:LoadIconW(nullptr,IDI_APPLICATION);
+ wc.hbrBackground=CreateSolidBrush(C_BG);
+ RegisterClassExW(&wc);
+
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
-  CW_USEDEFAULT,CW_USEDEFAULT,840,660,nullptr,nullptr,hi,nullptr);if(!gWnd)return 2;
- ShowWindow(gWnd,show);UpdateWindow(gWnd);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}return (int)msg.wParam;
+  CW_USEDEFAULT,CW_USEDEFAULT,920,700,nullptr,nullptr,hi,nullptr);
+ if(!gWnd)return 2;
+ ShowWindow(gWnd,show);UpdateWindow(gWnd);
+ MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
+ return (int)msg.wParam;
 }
