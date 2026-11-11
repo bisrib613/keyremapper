@@ -207,7 +207,12 @@ public sealed class RemapperForm : Form
             _engine.Capturing=false;
             if(vk==27){RefreshStatus();return;}
             var combo=_captureFrom?_from:_to;
-            if(KeyLabel.Codes.Contains(vk))combo.SelectedItem=vk;
+            if(KeyLabel.Codes.Contains(vk))
+            {
+                for(int i=0;i<combo.Items.Count;i++)
+                    if(combo.Items[i] is KeyOption option && option.Vk==vk)
+                    { combo.SelectedIndex=i; break; }
+            }
             RefreshStatus();
         };
         try {
