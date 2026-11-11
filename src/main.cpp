@@ -30,7 +30,7 @@ constexpr int WHEEL_UP = 0x1101;
 constexpr int WHEEL_DOWN = 0x1102;
 
 enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_MODIFY, ID_REMOVE, ID_LIST, ID_PAUSE,
- ID_STARTUP, ID_STATUS, ID_TITLE, ID_SUBTITLE, ID_SECTION,
+ ID_STARTUP, ID_STATUS, ID_TITLE, ID_SUBTITLE, ID_SECTION, ID_EMPTY, ID_LIST_SOURCE, ID_LIST_TARGET,
  ID_SRC_SHIFT, ID_SRC_CTRL, ID_SRC_ALT, ID_SRC_WIN, ID_DST_SHIFT, ID_DST_CTRL, ID_DST_ALT, ID_DST_WIN };
 enum ModMask : unsigned { KRM_SHIFT=1, KRM_CTRL=2, KRM_ALT=4, KRM_WIN=8 };
 
@@ -83,7 +83,7 @@ static std::vector<Choice> gSourceChoices;
 static std::vector<Choice> gTargetChoices;
 static HINSTANCE gInst;
 static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus, gStartup;
-static HWND gAdd, gModify, gRemove, gTitle, gSubtitle, gSection;
+static HWND gAdd, gModify, gRemove, gTitle, gSubtitle, gSection, gEmpty, gListSource, gListTarget, gIconControl;
 static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
 static int gEditingIndex=-1;
 
@@ -96,6 +96,7 @@ static constexpr COLORREF C_MUTED=RGB(155,155,155);
 static constexpr COLORREF C_BORDER=RGB(49,49,49);
 static HBRUSH gBrushBg=nullptr, gBrushSurface=nullptr, gBrushControl=nullptr;
 static HFONT gFontBody=nullptr, gFontSmall=nullptr, gFontTitle=nullptr, gFontLabel=nullptr;
+static HICON gIconLarge=nullptr, gIconSmall=nullptr;
 
 struct ComboWheelState { HWND combo=nullptr; int delta=0; };
 static ComboWheelState gSourceWheel, gTargetWheel;
