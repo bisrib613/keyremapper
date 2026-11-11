@@ -481,12 +481,13 @@ static int SelfTest() {
   Sleep(5);
  }
  gSelfObserveOutput=false;
+ auto isShiftVk=[](int vk){return vk==VK_SHIFT||vk==VK_LSHIFT||vk==VK_RSHIFT;};
  bool outputOk=false;
  for(size_t i=0;i+3<gSelfOutputEvents.size();++i) {
-  if(gSelfOutputEvents[i].vk==VK_SHIFT && gSelfOutputEvents[i].down &&
+  if(isShiftVk(gSelfOutputEvents[i].vk) && gSelfOutputEvents[i].down &&
      gSelfOutputEvents[i+1].vk=='2' && gSelfOutputEvents[i+1].down &&
      gSelfOutputEvents[i+2].vk=='2' && !gSelfOutputEvents[i+2].down &&
-     gSelfOutputEvents[i+3].vk==VK_SHIFT && !gSelfOutputEvents[i+3].down) {
+     isShiftVk(gSelfOutputEvents[i+3].vk) && !gSelfOutputEvents[i+3].down) {
     outputOk=true; break;
   }
  }
