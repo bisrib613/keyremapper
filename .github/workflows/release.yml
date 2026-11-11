@@ -1,43 +1,55 @@
-name: Build and release Windows installer
+name: Build native Windows installer
 on:
   push:
     branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
+
 jobs:
-  windows:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - name: Publish application
-        shell: pwsh
-        run: dotnet publish KeyRemapper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
-      - name: Install Inno Setup if missing
+
+      - name: Build native x86 executable
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
+          if not exist build mkdir build
+          cl /nologo /std:c++17 /O2 /MT /EHsc /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp user32.lib comctl32.lib shell32.lib advapi32.lib
+
+      - name: Native hook smoke test
         shell: pwsh
         run: |
-          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+          $p = Start-Process -FilePath ".\build\KeyRemapper.exe" -ArgumentList "--self-test" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Hook self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Install Inno Setup if needed
+        shell: pwsh
+        run: |
+          if (!(Test-Path "\${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
             choco install innosetup --yes --no-progress
           }
+
       - name: Build installer
         shell: pwsh
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KeyRemapper.iss"'
+        run: '& "\${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KeyRemapper.iss"'
+
       - uses: actions/upload-artifact@v4
         with:
-          name: KeyRemapper-Setup
+          name: KeyRemapper-Native-Setup
           path: dist/KeyRemapper_Setup.exe
           if-no-files-found: error
-      - name: Publish installer release
+
+      - name: Publish v1.1.0
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view v1.0.0 *> $null
+          gh release view v1.1.0 *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create v1.0.0 "dist/KeyRemapper_Setup.exe" --title "Key Remapper v1.0.0" --notes "Windows installer (Inno Setup). Non-portable. Unsigned beta build; keyboard hook behavior requires hardware validation."
+            gh release create v1.1.0 "dist/KeyRemapper_Setup.exe" --title "Key Remapper Native Rebuild v1.1.0" --notes "Native x86 Win32 rebuild. No bundled .NET runtime. Includes keyboard/mouse low-level hook smoke test in CI."
           } else {
-            gh release upload v1.0.0 "dist/KeyRemapper_Setup.exe" --clobber
+            gh release upload v1.1.0 "dist/KeyRemapper_Setup.exe" --clobber
           }
