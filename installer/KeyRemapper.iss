@@ -1,5 +1,5 @@
 #define AppName "Key Remapper"
-#define AppVersion "1.2.2"
+#define AppVersion "1.3.0"
 
 [Setup]
 AppId={{B0F2EDC4-65D9-4E6A-B8C4-23D41B532C6E}
