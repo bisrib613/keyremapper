@@ -82,9 +82,9 @@ static std::wstring NameOf(int code) {
 }
 static unsigned ModBitForVk(int vk) {
  switch(vk) {
-  case VK_LSHIFT: case VK_RSHIFT: return MOD_SHIFT;
-  case VK_LCONTROL: case VK_RCONTROL: return MOD_CTRL;
-  case VK_LMENU: case VK_RMENU: return MOD_ALT;
+  case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: return MOD_SHIFT;
+  case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: return MOD_CTRL;
+  case VK_MENU: case VK_LMENU: case VK_RMENU: return MOD_ALT;
   case VK_LWIN: case VK_RWIN: return MOD_WIN;
   default: return 0;
  }
@@ -361,15 +361,55 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
     case ID_BLOCK:{BOOL e=Button_GetCheck(gBlock)!=BST_CHECKED;EnableWindow(gTarget,e);break;}
    }return 0;
   case WM_KR_CAPTURE:{
-   int code=(int)w;bool src=l==0;if(code==VK_ESCAPE){Refresh();return 0;}SelectCode(src?gSource:gTarget,code);Refresh();return 0;}
+   int code=(int)w;
+   bool src=(l&1)==0;
+   unsigned mods=(unsigned)((ULONG_PTR)l>>1);
+   if(gSelfTestMode) { gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0; }
+   if(code==VK_ESCAPE){Refresh();return 0;}
+   SelectCode(src?gSource:gTarget,code);
+   if(src) SetModChecks(mods,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+   else SetModChecks(mods,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+   Refresh();return 0;}
   case WM_CLOSE:DestroyWindow(h);return 0;
   case WM_DESTROY:Save();Unhook();PostQuitMessage(0);return 0;
  }
  return DefWindowProcW(h,m,w,l);
 }
+static LRESULT CALLBACK SelfTestWndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ if(m==WM_KR_CAPTURE) {
+  gSelfCapturedCode=(int)w;
+  gSelfCapturedMods=(unsigned)((ULONG_PTR)l>>1);
+  return 0;
+ }
+ return DefWindowProcW(h,m,w,l);
+}
 static int SelfTest() {
- HHOOK k=SetWindowsHookExW(WH_KEYBOARD_LL,KeyHook,gInst,0),m=SetWindowsHookExW(WH_MOUSE_LL,MouseHook,gInst,0);
- int ok=(k&&m)?0:10;if(k)UnhookWindowsHookEx(k);if(m)UnhookWindowsHookEx(m);return ok;
+ gSelfTestMode=true;
+ WNDCLASSEXW wc{sizeof(wc)};
+ wc.hInstance=gInst; wc.lpfnWndProc=SelfTestWndProc; wc.lpszClassName=L"KRNativeSelfTest";
+ RegisterClassExW(&wc);
+ gWnd=CreateWindowExW(0,wc.lpszClassName,L"",0,0,0,0,0,HWND_MESSAGE,nullptr,gInst,nullptr);
+ if(!gWnd) return 20;
+ if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
+
+ gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0; gCaptureSource=true; gCaptureTarget=false;
+ SendCode(VK_SHIFT,true);
+ SendCode('2',true);
+ SendCode('2',false);
+ SendCode(VK_SHIFT,false);
+
+ DWORD until=GetTickCount()+1000;
+ MSG msg;
+ while(GetTickCount()<until && gSelfCapturedCode==0) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) {
+   TranslateMessage(&msg); DispatchMessageW(&msg);
+  }
+  Sleep(5);
+ }
+ bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&MOD_SHIFT)!=0);
+ Unhook();
+ DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
+ return captureOk?0:22;
 }
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
