@@ -584,17 +584,27 @@ static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
 
 static void LayoutUi(int width,int height) {
  if(!gList) return;
- int listTop=304;
- int footerHeight=56;
- int listBottom=std::max(listTop+160,height-footerHeight-16);
- int listWidth=std::max(520,width-48);
- MoveWindow(gList,24,listTop,listWidth,listBottom-listTop,TRUE);
- int footerY=height-48;
- if(gStartup) MoveWindow(gStartup,24,footerY,155,28,TRUE);
- if(gStatus) MoveWindow(gStatus,196,footerY+4,std::max(220,width-196-150-40),24,TRUE);
- if(gPause) MoveWindow(gPause,width-132,footerY-2,108,34,TRUE);
- ListView_SetColumnWidth(gList,0,std::max(220,(listWidth-4)/2));
- ListView_SetColumnWidth(gList,1,std::max(220,listWidth-4-ListView_GetColumnWidth(gList,0)));
+ const int margin=24;
+ const int listTop=366;
+ const int footerY=height-52;
+ const int listBottom=std::max(listTop+150,footerY-18);
+ const int listWidth=std::max(620,width-margin*2);
+ const int half=listWidth/2;
+
+ if(gListSource) MoveWindow(gListSource,margin+14,338,half-20,22,TRUE);
+ if(gListTarget) MoveWindow(gListTarget,margin+half+8,338,half-20,22,TRUE);
+ MoveWindow(gList,margin,listTop,listWidth,listBottom-listTop,TRUE);
+
+ if(gEmpty) {
+  int emptyW=std::min(420,listWidth-48);
+  MoveWindow(gEmpty,margin+(listWidth-emptyW)/2,listTop+52,emptyW,34,TRUE);
+ }
+ if(gStartup) MoveWindow(gStartup,margin,footerY,162,30,TRUE);
+ if(gStatus) MoveWindow(gStatus,204,footerY+5,std::max(220,width-204-146),22,TRUE);
+ if(gPause) MoveWindow(gPause,width-124,footerY-2,100,34,TRUE);
+
+ ListView_SetColumnWidth(gList,0,half);
+ ListView_SetColumnWidth(gList,1,listWidth-half);
 }
 
 static void CreateUi(HWND h) {
