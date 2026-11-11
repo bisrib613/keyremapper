@@ -1,21 +1,28 @@
-# Key Remapper
+# Key Remapper — native clean-room rebuild
 
-Windows keyboard remapper (C# WinForms, .NET 8). Uses Windows low-level keyboard hooks and SendInput. No drivers, telemetry, license checks, or bundled software.
+This repository contains a native Win32 x86 implementation. The previous .NET self-contained prototype was removed because it produced an unnecessarily large installer and did not match the reference application's architecture.
 
-## Download
-The downloadable **installer** is available in [GitHub Releases](https://github.com/bisrib613/keyremapper/releases), named `KeyRemapper_Setup.exe`. This is an Inno Setup installer, **not** a portable executable.
+## Audit of the reference installer
 
-## Features
-- Add/remove keyboard remappings.
-- Enable/disable remapping.
-- Automatically persist mappings in `%APPDATA%\KeyRemapper\settings.json`.
-- JSON import/export and restore defaults.
-- Installer creates uninstall entry and Start Menu shortcut.
+The supplied reference installer is Inno Setup 5.5.7. Its main payload is a native x86 `keyremapper.exe`, not a .NET application. The payload executable is packed/protected, so this project does not copy proprietary source code, licensing, or protection logic. It is a clean-room implementation of the remapping behavior.
 
-## Build
-Pushes to `main` build the Windows x64 application and installer using GitHub Actions. Successful builds publish or update the `v1.0.0` Release.
+## Current native build
 
-## Limitations
-- No kernel driver; secure desktop and higher-integrity application windows can be inaccessible.
-- Repeated keys, modifier combinations, non-US layouts, and physical keyboards need practical testing before treating this as production-ready.
-- Unsigned executables may trigger SmartScreen warnings.
+- Keyboard key to keyboard key
+- Keyboard key to mouse button or wheel action
+- Mouse button or wheel action to keyboard or mouse action
+- Block a source input
+- Capture source/target directly from keyboard or mouse
+- Pause/resume
+- Persistent mappings in `%APPDATA%\KeyRemapperClean\mappings.txt`
+- Low-level keyboard and mouse hooks
+- Injected-output suppression to prevent remap loops
+- CI smoke test checks that both low-level hooks can be installed
+
+## Installer
+
+GitHub Actions builds `KeyRemapper_Setup.exe` with MSVC x86 and Inno Setup, then publishes it to GitHub Releases. It is an installer, not a portable build, and it does not bundle the .NET runtime.
+
+## Current scope
+
+Version 1.1.0 is focused on validating the remapping core. It is not yet full feature parity with the reference application. Profiles, per-application rules, modifier combinations, double-press timing, folders, and tray behavior will be added after the core keyboard/mouse hook path is validated on real Windows hardware.
