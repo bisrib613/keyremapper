@@ -25,7 +25,7 @@ constexpr int WHEEL_DOWN = 0x1102;
 
 enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_REMOVE, ID_LIST, ID_PAUSE, ID_STATUS,
  ID_SRC_SHIFT, ID_SRC_CTRL, ID_SRC_ALT, ID_SRC_WIN, ID_DST_SHIFT, ID_DST_CTRL, ID_DST_ALT, ID_DST_WIN };
-enum ModMask : unsigned { MOD_SHIFT=1, MOD_CTRL=2, MOD_ALT=4, MOD_WIN=8 };
+enum ModMask : unsigned { KRM_SHIFT=1, KRM_CTRL=2, KRM_ALT=4, KRM_WIN=8 };
 
 struct Item { int code; const wchar_t* name; };
 static const Item ITEMS[] = {
@@ -82,18 +82,18 @@ static std::wstring NameOf(int code) {
 }
 static unsigned ModBitForVk(int vk) {
  switch(vk) {
-  case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: return MOD_SHIFT;
-  case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: return MOD_CTRL;
-  case VK_MENU: case VK_LMENU: case VK_RMENU: return MOD_ALT;
-  case VK_LWIN: case VK_RWIN: return MOD_WIN;
+  case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: return KRM_SHIFT;
+  case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: return KRM_CTRL;
+  case VK_MENU: case VK_LMENU: case VK_RMENU: return KRM_ALT;
+  case VK_LWIN: case VK_RWIN: return KRM_WIN;
   default: return 0;
  }
 }
 static int VkForMod(unsigned bit) {
- if(bit==MOD_SHIFT) return VK_SHIFT;
- if(bit==MOD_CTRL) return VK_CONTROL;
- if(bit==MOD_ALT) return VK_MENU;
- if(bit==MOD_WIN) return VK_LWIN;
+ if(bit==KRM_SHIFT) return VK_SHIFT;
+ if(bit==KRM_CTRL) return VK_CONTROL;
+ if(bit==KRM_ALT) return VK_MENU;
+ if(bit==KRM_WIN) return VK_LWIN;
  return 0;
 }
 static const wchar_t* ShiftSymbol(int code) {
@@ -110,12 +110,12 @@ static const wchar_t* ShiftSymbol(int code) {
 }
 static std::wstring Describe(int code,unsigned mods) {
  std::wstring out;
- if(mods&MOD_CTRL) out+=L"Ctrl+";
- if(mods&MOD_ALT) out+=L"Alt+";
- if(mods&MOD_WIN) out+=L"Win+";
- if(mods&MOD_SHIFT) out+=L"Shift+";
+ if(mods&KRM_CTRL) out+=L"Ctrl+";
+ if(mods&KRM_ALT) out+=L"Alt+";
+ if(mods&KRM_WIN) out+=L"Win+";
+ if(mods&KRM_SHIFT) out+=L"Shift+";
  out+=NameOf(code);
- if((mods&MOD_SHIFT) && ShiftSymbol(code)) {
+ if((mods&KRM_SHIFT) && ShiftSymbol(code)) {
   out+=L"  (";
   out+=ShiftSymbol(code);
   out+=L")";
@@ -152,7 +152,7 @@ static void SendCode(int code,bool down) {
 }
 static ActiveEmission BeginTarget(const Mapping& m) {
  ActiveEmission a{}; a.target=m.target;
- unsigned all[]={MOD_SHIFT,MOD_CTRL,MOD_ALT,MOD_WIN};
+ unsigned all[]={KRM_SHIFT,KRM_CTRL,KRM_ALT,KRM_WIN};
  for(unsigned bit:all) {
   if((gPhysicalMods&bit) && !(m.dstMods&bit)) {
    SendCode(VkForMod(bit),false); a.suppressed|=bit;
@@ -169,7 +169,7 @@ static ActiveEmission BeginTarget(const Mapping& m) {
 static void EndTarget(const ActiveEmission& a) {
  if(!a.target)return;
  SendCode(a.target,false);
- unsigned all[]={MOD_WIN,MOD_ALT,MOD_CTRL,MOD_SHIFT};
+ unsigned all[]={KRM_WIN,KRM_ALT,KRM_CTRL,KRM_SHIFT};
  for(unsigned bit:all) if(a.synthetic&bit) SendCode(VkForMod(bit),false);
  for(unsigned bit:all) if((a.suppressed&bit)&&(gPhysicalMods&bit)) SendCode(VkForMod(bit),true);
 }
@@ -276,17 +276,17 @@ static void SelectCode(HWND h,int code){for(int i=0;i<ComboBox_GetCount(h);++i)i
 static void FillCombo(HWND h){for(auto&i:ITEMS){int n=ComboBox_AddString(h,i.name);ComboBox_SetItemData(h,n,i.code);}}
 static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
  unsigned m=0;
- if(Button_GetCheck(sh)==BST_CHECKED)m|=MOD_SHIFT;
- if(Button_GetCheck(ctrl)==BST_CHECKED)m|=MOD_CTRL;
- if(Button_GetCheck(alt)==BST_CHECKED)m|=MOD_ALT;
- if(Button_GetCheck(win)==BST_CHECKED)m|=MOD_WIN;
+ if(Button_GetCheck(sh)==BST_CHECKED)m|=KRM_SHIFT;
+ if(Button_GetCheck(ctrl)==BST_CHECKED)m|=KRM_CTRL;
+ if(Button_GetCheck(alt)==BST_CHECKED)m|=KRM_ALT;
+ if(Button_GetCheck(win)==BST_CHECKED)m|=KRM_WIN;
  return m;
 }
 static void SetModChecks(unsigned m,HWND sh,HWND ctrl,HWND alt,HWND win) {
- Button_SetCheck(sh,(m&MOD_SHIFT)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(ctrl,(m&MOD_CTRL)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(alt,(m&MOD_ALT)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(win,(m&MOD_WIN)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(sh,(m&KRM_SHIFT)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(ctrl,(m&KRM_CTRL)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(alt,(m&KRM_ALT)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(win,(m&KRM_WIN)?BST_CHECKED:BST_UNCHECKED);
 }
 static void Refresh() {
  ListView_DeleteAllItems(gList);int row=0;
@@ -406,7 +406,7 @@ static int SelfTest() {
   }
   Sleep(5);
  }
- bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&MOD_SHIFT)!=0);
+ bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&KRM_SHIFT)!=0);
  Unhook();
  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
  return captureOk?0:22;
