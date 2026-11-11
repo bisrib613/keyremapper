@@ -255,18 +255,43 @@ static std::wstring ConfigPath() {
 }
 static void Save() {
  std::wofstream f(ConfigPath(),std::ios::trunc);
- if(!f)return;for(auto&m:gMaps)f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L'\n';
+ if(!f)return;
+ for(auto&m:gMaps) f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L' '<<m.srcMods<<L' '<<m.dstMods<<L'\n';
 }
 static void Load() {
- std::wifstream f(ConfigPath());int s,t,b;while(f>>s>>t>>b)gMaps.push_back({s,t,b!=0});
+ std::wifstream f(ConfigPath());
+ if(!f)return;
+ std::wstring line;
+ while(std::getline(f,line)) {
+  if(line.empty())continue;
+  std::wistringstream in(line);
+  int src=0,dst=0,block=0; unsigned sm=0,dm=0;
+  if(!(in>>src>>dst>>block))continue;
+  in>>sm>>dm;
+  gMaps.push_back({src,dst,block!=0,sm,dm});
+ }
 }
 static int ComboCode(HWND h) {int i=ComboBox_GetCurSel(h);return i==CB_ERR?0:(int)ComboBox_GetItemData(h,i);}
 static void SelectCode(HWND h,int code){for(int i=0;i<ComboBox_GetCount(h);++i)if((int)ComboBox_GetItemData(h,i)==code){ComboBox_SetCurSel(h,i);break;}}
 static void FillCombo(HWND h){for(auto&i:ITEMS){int n=ComboBox_AddString(h,i.name);ComboBox_SetItemData(h,n,i.code);}}
+static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
+ unsigned m=0;
+ if(Button_GetCheck(sh)==BST_CHECKED)m|=MOD_SHIFT;
+ if(Button_GetCheck(ctrl)==BST_CHECKED)m|=MOD_CTRL;
+ if(Button_GetCheck(alt)==BST_CHECKED)m|=MOD_ALT;
+ if(Button_GetCheck(win)==BST_CHECKED)m|=MOD_WIN;
+ return m;
+}
+static void SetModChecks(unsigned m,HWND sh,HWND ctrl,HWND alt,HWND win) {
+ Button_SetCheck(sh,(m&MOD_SHIFT)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(ctrl,(m&MOD_CTRL)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(alt,(m&MOD_ALT)?BST_CHECKED:BST_UNCHECKED);
+ Button_SetCheck(win,(m&MOD_WIN)?BST_CHECKED:BST_UNCHECKED);
+}
 static void Refresh() {
  ListView_DeleteAllItems(gList);int row=0;
  for(auto&m:gMaps) {
-  std::wstring a=NameOf(m.source),b=m.block?L"[Blocked]":NameOf(m.target);
+  std::wstring a=Describe(m.source,m.srcMods),b=m.block?L"[Blocked]":Describe(m.target,m.dstMods);
   LVITEMW it{};it.mask=LVIF_TEXT|LVIF_PARAM;it.iItem=row;it.pszText=a.data();it.lParam=(LPARAM)&m;
   ListView_InsertItem(gList,&it);ListView_SetItemText(gList,row,1,b.data());++row;
  }
@@ -282,25 +307,40 @@ static void CreateUi(HWND h) {
  auto label=[&](const wchar_t*t,int x,int y,int w){HWND z=Make(h,L"STATIC",t,SS_LEFT,x,y,w,22,0);SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);};
  label(L"Source",18,24,55);gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,78,18,230,300,ID_SOURCE);
  HWND cs=Make(h,L"BUTTON",L"Capture",BS_PUSHBUTTON,318,18,85,28,ID_CAP_SRC);
+ label(L"Mods",420,24,38);
+ gSrcShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,462,19,60,26,ID_SRC_SHIFT);
+ gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,522,19,52,26,ID_SRC_CTRL);
+ gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,574,19,48,26,ID_SRC_ALT);
+ gSrcWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,622,19,52,26,ID_SRC_WIN);
  label(L"Target",18,68,55);gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,78,62,230,300,ID_TARGET);
  HWND ct=Make(h,L"BUTTON",L"Capture",BS_PUSHBUTTON,318,62,85,28,ID_CAP_DST);
- gBlock=Make(h,L"BUTTON",L"Block source",BS_AUTOCHECKBOX,430,63,115,26,ID_BLOCK);
+ label(L"Mods",420,68,38);
+ gDstShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,462,63,60,26,ID_DST_SHIFT);
+ gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,522,63,52,26,ID_DST_CTRL);
+ gDstAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,574,63,48,26,ID_DST_ALT);
+ gDstWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,622,63,52,26,ID_DST_WIN);
+ gBlock=Make(h,L"BUTTON",L"Block source",BS_AUTOCHECKBOX,430,110,115,26,ID_BLOCK);
  HWND add=Make(h,L"BUTTON",L"Add / Update",BS_DEFPUSHBUTTON,18,110,130,32,ID_ADD);
  HWND rem=Make(h,L"BUTTON",L"Remove selected",BS_PUSHBUTTON,158,110,140,32,ID_REMOVE);
- gPause=Make(h,L"BUTTON",L"Pause",BS_PUSHBUTTON,430,110,115,32,ID_PAUSE);
- gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,18,160,530,270,ID_LIST,WS_EX_CLIENTEDGE);
+ gPause=Make(h,L"BUTTON",L"Pause",BS_PUSHBUTTON,555,110,115,32,ID_PAUSE);
+ gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,18,160,656,270,ID_LIST,WS_EX_CLIENTEDGE);
  ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_GRIDLINES|LVS_EX_DOUBLEBUFFER);
  LVCOLUMNW col{};col.mask=LVCF_TEXT|LVCF_WIDTH;col.pszText=(LPWSTR)L"Source";col.cx=250;ListView_InsertColumn(gList,0,&col);
- col.pszText=(LPWSTR)L"Target";col.cx=250;ListView_InsertColumn(gList,1,&col);
+ col.pszText=(LPWSTR)L"Target";col.cx=380;ListView_InsertColumn(gList,1,&col);
  gStatus=Make(h,L"STATIC",L"",SS_LEFT,18,445,530,24,ID_STATUS);
- HWND controls[]={gSource,cs,gTarget,ct,gBlock,add,rem,gPause,gList,gStatus};
+ HWND controls[]={gSource,cs,gTarget,ct,gBlock,add,rem,gPause,gList,gStatus,
+  gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
  for(HWND z:controls)SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);
  FillCombo(gSource);FillCombo(gTarget);SelectCode(gSource,VK_CAPITAL);SelectCode(gTarget,VK_ESCAPE);Refresh();
 }
 static void AddMap() {
- Mapping m{ComboCode(gSource),ComboCode(gTarget),Button_GetCheck(gBlock)==BST_CHECKED};
+ Mapping m;
+ m.source=ComboCode(gSource); m.target=ComboCode(gTarget);
+ m.block=Button_GetCheck(gBlock)==BST_CHECKED;
+ m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin);
  if(!m.source||(!m.block&&!m.target))return;
- for(auto&x:gMaps)if(x.source==m.source){x=m;Save();Refresh();return;}
+ for(auto&x:gMaps)if(x.source==m.source && x.srcMods==m.srcMods){x=m;Save();Refresh();return;}
  gMaps.push_back(m);Save();Refresh();
 }
 static void RemoveMap() {
@@ -337,6 +377,6 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  WNDCLASSEXW wc{sizeof(wc)};wc.hInstance=hi;wc.lpfnWndProc=WndProc;wc.lpszClassName=L"KRNative";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
  wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassExW(&wc);
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper - Native Rebuild",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,
-  CW_USEDEFAULT,CW_USEDEFAULT,585,525,nullptr,nullptr,hi,nullptr);if(!gWnd)return 2;
+  CW_USEDEFAULT,CW_USEDEFAULT,715,525,nullptr,nullptr,hi,nullptr);if(!gWnd)return 2;
  ShowWindow(gWnd,show);UpdateWindow(gWnd);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}return (int)msg.wParam;
 }
