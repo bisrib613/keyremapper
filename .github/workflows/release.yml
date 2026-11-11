@@ -19,7 +19,7 @@ jobs:
           if not defined VSROOT exit /b 2
           call "%VSROOT%\VC\Auxiliary\Build\vcvars32.bat"
           if not exist build mkdir build
-          cl /nologo /std:c++17 /O2 /MT /EHsc /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp user32.lib comctl32.lib shell32.lib advapi32.lib
+          cl /nologo /std:c++17 /O2 /MT /EHsc /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp user32.lib gdi32.lib comctl32.lib shell32.lib advapi32.lib
 
       - name: Native hook smoke test
         shell: pwsh
