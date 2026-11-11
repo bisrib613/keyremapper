@@ -304,6 +304,71 @@ static std::wstring ConfigPath() {
  wchar_t p[MAX_PATH];SHGetFolderPathW(nullptr,CSIDL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,p);
  std::wstring d=std::wstring(p)+L"\\KeyRemapperClean";CreateDirectoryW(d.c_str(),nullptr);return d+L"\\mappings.txt";
 }
+static const wchar_t* STARTUP_RUN_KEY=L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+static const wchar_t* STARTUP_VALUE=L"KeyRemapper";
+
+static bool StartupEnabled() {
+ HKEY key=nullptr;
+ if(RegOpenKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,KEY_QUERY_VALUE,&key)!=ERROR_SUCCESS) return false;
+ DWORD type=0,size=0;
+ LONG result=RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,nullptr,&size);
+ RegCloseKey(key);
+ return result==ERROR_SUCCESS && type==REG_SZ && size>sizeof(wchar_t);
+}
+static bool SetStartupEnabled(bool enabled) {
+ HKEY key=nullptr;
+ if(RegCreateKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr)!=ERROR_SUCCESS) return false;
+ LONG result=ERROR_SUCCESS;
+ if(enabled) {
+  wchar_t exe[MAX_PATH]{};
+  if(!GetModuleFileNameW(nullptr,exe,MAX_PATH)) { RegCloseKey(key); return false; }
+  std::wstring command=L"\""+std::wstring(exe)+L"\"";
+  result=RegSetValueExW(key,STARTUP_VALUE,0,REG_SZ,
+    reinterpret_cast<const BYTE*>(command.c_str()),(DWORD)((command.size()+1)*sizeof(wchar_t)));
+ } else {
+  result=RegDeleteValueW(key,STARTUP_VALUE);
+  if(result==ERROR_FILE_NOT_FOUND) result=ERROR_SUCCESS;
+ }
+ RegCloseKey(key);
+ return result==ERROR_SUCCESS;
+}
+
+static LRESULT CALLBACK ComboWheelProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam,UINT_PTR,DWORD_PTR refData) {
+ auto* state=reinterpret_cast<ComboWheelState*>(refData);
+ if(msg==WM_MOUSEWHEEL && state && state->combo) {
+  state->delta+=GET_WHEEL_DELTA_WPARAM(wParam);
+  int count=ComboBox_GetCount(state->combo);
+  int current=ComboBox_GetCurSel(state->combo);
+  if(current==CB_ERR) current=0;
+  bool changed=false;
+  while(state->delta>=WHEEL_DELTA) {
+   int next=std::max(0,current-1);
+   changed|=(next!=current); current=next; state->delta-=WHEEL_DELTA;
+  }
+  while(state->delta<=-WHEEL_DELTA) {
+   int next=std::min(std::max(0,count-1),current+1);
+   changed|=(next!=current); current=next; state->delta+=WHEEL_DELTA;
+  }
+  if(changed) {
+   ComboBox_SetCurSel(state->combo,current);
+   COMBOBOXINFO info{sizeof(info)};
+   if(GetComboBoxInfo(state->combo,&info) && info.hwndList) {
+    SendMessageW(info.hwndList,LB_SETCURSEL,current,0);
+    InvalidateRect(info.hwndList,nullptr,TRUE);
+   }
+   InvalidateRect(state->combo,nullptr,TRUE);
+  }
+  return 0;
+ }
+ return DefSubclassProc(hwnd,msg,wParam,lParam);
+}
+static void InstallStableComboWheel(HWND combo,ComboWheelState& state) {
+ state.combo=combo; state.delta=0;
+ SetWindowSubclass(combo,ComboWheelProc,1,reinterpret_cast<DWORD_PTR>(&state));
+ COMBOBOXINFO info{sizeof(info)};
+ if(GetComboBoxInfo(combo,&info) && info.hwndList)
+  SetWindowSubclass(info.hwndList,ComboWheelProc,2,reinterpret_cast<DWORD_PTR>(&state));
+}
 static void Save() {
  std::wofstream f(ConfigPath(),std::ios::trunc);
  if(!f)return;
