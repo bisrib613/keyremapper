@@ -3,6 +3,8 @@
 #include <commctrl.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -12,6 +14,9 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "uxtheme.lib")
 
 constexpr ULONG_PTR KR_MAGIC = 0x4B524D50;
 constexpr UINT WM_KR_CAPTURE = WM_APP + 1;
@@ -23,7 +28,8 @@ constexpr int MOUSE_X2 = 0x1005;
 constexpr int WHEEL_UP = 0x1101;
 constexpr int WHEEL_DOWN = 0x1102;
 
-enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_REMOVE, ID_LIST, ID_PAUSE, ID_STATUS,
+enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_MODIFY, ID_REMOVE, ID_LIST, ID_PAUSE,
+ ID_STARTUP, ID_STATUS, ID_TITLE, ID_SUBTITLE, ID_SECTION,
  ID_SRC_SHIFT, ID_SRC_CTRL, ID_SRC_ALT, ID_SRC_WIN, ID_DST_SHIFT, ID_DST_CTRL, ID_DST_ALT, ID_DST_WIN };
 enum ModMask : unsigned { KRM_SHIFT=1, KRM_CTRL=2, KRM_ALT=4, KRM_WIN=8 };
 
@@ -75,8 +81,23 @@ struct Choice { int code=0; unsigned mods=0; };
 static std::vector<Choice> gSourceChoices;
 static std::vector<Choice> gTargetChoices;
 static HINSTANCE gInst;
-static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus;
+static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus, gStartup;
+static HWND gAdd, gModify, gRemove, gTitle, gSubtitle, gSection;
 static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
+static int gEditingIndex=-1;
+
+static constexpr COLORREF C_BG=RGB(24,24,24);
+static constexpr COLORREF C_SURFACE=RGB(31,31,31);
+static constexpr COLORREF C_CONTROL=RGB(39,39,39);
+static constexpr COLORREF C_HOVER=RGB(49,49,49);
+static constexpr COLORREF C_TEXT=RGB(255,255,255);
+static constexpr COLORREF C_MUTED=RGB(155,155,155);
+static constexpr COLORREF C_BORDER=RGB(49,49,49);
+static HBRUSH gBrushBg=nullptr, gBrushSurface=nullptr, gBrushControl=nullptr;
+static HFONT gFontBody=nullptr, gFontSmall=nullptr, gFontTitle=nullptr, gFontLabel=nullptr;
+
+struct ComboWheelState { HWND combo=nullptr; int delta=0; };
+static ComboWheelState gSourceWheel, gTargetWheel;
 static HHOOK gKeyboard, gMouse;
 static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false, gSelfTestMode=false;
 static int gCaptureSwallow=0;
