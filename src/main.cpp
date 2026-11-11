@@ -513,17 +513,17 @@ static HWND Make(HWND p,const wchar_t*c,const wchar_t*t,DWORD s,int x,int y,int 
 static HFONT MakeUiFont(HWND h,int px,int weight) {
  UINT dpi=GetDpiForWindow(h);
  return CreateFontW(-MulDiv(px,(int)dpi,96),0,0,0,weight,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
-  OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_DONTCARE,L"Manrope");
+  OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_DONTCARE,L"Segoe UI");
 }
 
 static void EnsureUiResources(HWND h) {
  if(!gBrushBg) gBrushBg=CreateSolidBrush(C_BG);
  if(!gBrushSurface) gBrushSurface=CreateSolidBrush(C_SURFACE);
  if(!gBrushControl) gBrushControl=CreateSolidBrush(C_CONTROL);
- if(!gFontBody) gFontBody=MakeUiFont(h,16,FW_MEDIUM);
- if(!gFontSmall) gFontSmall=MakeUiFont(h,14,FW_NORMAL);
- if(!gFontLabel) gFontLabel=MakeUiFont(h,14,FW_SEMIBOLD);
- if(!gFontTitle) gFontTitle=MakeUiFont(h,24,FW_SEMIBOLD);
+ if(!gFontBody) gFontBody=MakeUiFont(h,15,FW_NORMAL);
+ if(!gFontSmall) gFontSmall=MakeUiFont(h,13,FW_NORMAL);
+ if(!gFontLabel) gFontLabel=MakeUiFont(h,13,FW_SEMIBOLD);
+ if(!gFontTitle) gFontTitle=MakeUiFont(h,26,FW_SEMIBOLD);
 }
 
 static void ApplyFont(HWND h,HFONT font) {
