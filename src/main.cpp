@@ -86,6 +86,10 @@ static int gCaptureSwallow=0;
 static unsigned gPhysicalMods=0;
 static int gSelfCapturedCode=0;
 static unsigned gSelfCapturedMods=0;
+struct TestEvent { int vk; bool down; };
+static std::vector<TestEvent> gSelfOutputEvents;
+static bool gSelfObserveOutput=false;
+constexpr ULONG_PTR TEST_MAGIC = 0x4B525453;
 static std::vector<Mapping> gMaps;
 struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; };
 static std::vector<ActiveEmission> gActive(0x1200);
@@ -163,6 +167,14 @@ static void SendCode(int code,bool down) {
  }
  SendInput(1,&in,sizeof(in));
 }
+static void SendTestKey(int vk,bool down) {
+ INPUT in{};
+ in.type=INPUT_KEYBOARD;
+ in.ki.wVk=(WORD)vk;
+ in.ki.dwExtraInfo=TEST_MAGIC;
+ if(!down) in.ki.dwFlags|=KEYEVENTF_KEYUP;
+ SendInput(1,&in,sizeof(in));
+}
 static ActiveEmission BeginTarget(const Mapping& m) {
  ActiveEmission a{}; a.target=m.target;
  unsigned all[]={KRM_SHIFT,KRM_CTRL,KRM_ALT,KRM_WIN};
@@ -225,7 +237,15 @@ static bool Handle(int src,bool down,bool pulse=false) {
 static LRESULT CALLBACK KeyHook(int n,WPARAM w,LPARAM l) {
  if(n<0)return CallNextHookEx(gKeyboard,n,w,l);
  auto*k=(KBDLLHOOKSTRUCT*)l;
- if(!gSelfTestMode && ((k->flags&LLKHF_INJECTED)||k->dwExtraInfo==KR_MAGIC))
+ if(k->dwExtraInfo==KR_MAGIC) {
+  if(gSelfTestMode && gSelfObserveOutput) {
+   bool od=w==WM_KEYDOWN||w==WM_SYSKEYDOWN;
+   bool ou=w==WM_KEYUP||w==WM_SYSKEYUP;
+   if(od||ou) gSelfOutputEvents.push_back({(int)k->vkCode,od});
+  }
+  return CallNextHookEx(gKeyboard,n,w,l);
+ }
+ if((k->flags&LLKHF_INJECTED) && !gSelfTestMode)
   return CallNextHookEx(gKeyboard,n,w,l);
  bool d=w==WM_KEYDOWN||w==WM_SYSKEYDOWN,u=w==WM_KEYUP||w==WM_SYSKEYUP;
  if(!d&&!u) return CallNextHookEx(gKeyboard,n,w,l);
@@ -429,10 +449,10 @@ static int SelfTest() {
  if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
 
  gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0; gCaptureSource=true; gCaptureTarget=false;
- SendCode(VK_SHIFT,true);
- SendCode('2',true);
- SendCode('2',false);
- SendCode(VK_SHIFT,false);
+ SendTestKey(VK_SHIFT,true);
+ SendTestKey('2',true);
+ SendTestKey('2',false);
+ SendTestKey(VK_SHIFT,false);
 
  DWORD until=GetTickCount()+1000;
  MSG msg;
@@ -443,9 +463,36 @@ static int SelfTest() {
   Sleep(5);
  }
  bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&KRM_SHIFT)!=0);
+ if(!captureOk) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 22;
+ }
+
+ // Runtime emission test: A must produce Shift+2, not bare 2.
+ gCaptureSource=gCaptureTarget=false; gCaptureSwallow=0; gPhysicalMods=0; gPaused=false;
+ gMaps.clear(); gMaps.push_back({'A','2',false,0,KRM_SHIFT});
+ gSelfOutputEvents.clear(); gSelfObserveOutput=true;
+ SendTestKey('A',true);
+ SendTestKey('A',false);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfOutputEvents.size()<4) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) {
+   TranslateMessage(&msg); DispatchMessageW(&msg);
+  }
+  Sleep(5);
+ }
+ gSelfObserveOutput=false;
+ bool outputOk=false;
+ for(size_t i=0;i+3<gSelfOutputEvents.size();++i) {
+  if(gSelfOutputEvents[i].vk==VK_SHIFT && gSelfOutputEvents[i].down &&
+     gSelfOutputEvents[i+1].vk=='2' && gSelfOutputEvents[i+1].down &&
+     gSelfOutputEvents[i+2].vk=='2' && !gSelfOutputEvents[i+2].down &&
+     gSelfOutputEvents[i+3].vk==VK_SHIFT && !gSelfOutputEvents[i+3].down) {
+    outputOk=true; break;
+  }
+ }
  Unhook();
  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
- return captureOk?0:22;
+ return outputOk?0:23;
 }
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
