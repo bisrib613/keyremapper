@@ -79,7 +79,7 @@ internal sealed class KeyboardEngine : IDisposable
         bool down=wp==(IntPtr)WM_KEYDOWN||wp==(IntPtr)WM_SYSKEYDOWN;
         bool up=wp==(IntPtr)WM_KEYUP||wp==(IntPtr)WM_SYSKEYUP;
         if(!down&&!up)return CallNextHookEx(_hook,n,wp,lp);
-        var code=(int)data.vkCode;
+        var code=(int)data.code;
         if(Capturing)
         {
             if(down) KeyCaptured?.Invoke(code);
