@@ -612,51 +612,61 @@ static void CreateUi(HWND h) {
  BOOL dark=TRUE;
  DwmSetWindowAttribute(h,20,&dark,sizeof(dark));
 
- gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,24,18,420,34,ID_TITLE);
- gSubtitle=Make(h,L"STATIC",L"Map keyboard and mouse input without changing hardware drivers.",SS_LEFT,24,50,620,24,ID_SUBTITLE);
- gSection=Make(h,L"STATIC",L"Mapping editor",SS_LEFT,24,88,180,24,ID_SECTION);
+ gIconControl=Make(h,L"STATIC",L"",SS_ICON|SS_REALSIZECONTROL,24,20,36,36,0);
+ if(gIconLarge) SendMessageW(gIconControl,STM_SETICON,(WPARAM)gIconLarge,0);
 
- Make(h,L"STATIC",L"Source",SS_LEFT,24,126,64,24,0);
- gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,118,250,360,ID_SOURCE);
- HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,358,118,88,34,ID_CAP_SRC);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,466,126,70,24,0);
- gSrcShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,540,120,62,28,ID_SRC_SHIFT);
- gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,606,120,54,28,ID_SRC_CTRL);
- gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,664,120,50,28,ID_SRC_ALT);
- gSrcWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,718,120,54,28,ID_SRC_WIN);
+ gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,76,18,460,34,ID_TITLE);
+ gSubtitle=Make(h,L"STATIC",L"Remap keyboard and mouse input with precise modifier control.",SS_LEFT,76,52,650,22,ID_SUBTITLE);
+ gSection=Make(h,L"STATIC",L"Create mapping",SS_LEFT,24,96,180,24,ID_SECTION);
 
- Make(h,L"STATIC",L"Target",SS_LEFT,24,174,64,24,0);
- gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,166,250,360,ID_TARGET);
- HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,358,166,88,34,ID_CAP_DST);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,466,174,70,24,0);
- gDstShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,540,168,62,28,ID_DST_SHIFT);
- gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,606,168,54,28,ID_DST_CTRL);
- gDstAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,664,168,50,28,ID_DST_ALT);
- gDstWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,718,168,54,28,ID_DST_WIN);
+ Make(h,L"STATIC",L"Source",SS_LEFT,24,142,68,22,0);
+ gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,104,132,286,360,ID_SOURCE);
+ HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,402,132,94,36,ID_CAP_SRC);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,520,142,70,22,0);
+ DWORD toggleStyle=BS_AUTOCHECKBOX|BS_PUSHLIKE;
+ gSrcShift=Make(h,L"BUTTON",L"Shift",toggleStyle,592,134,60,32,ID_SRC_SHIFT);
+ gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",toggleStyle,658,134,54,32,ID_SRC_CTRL);
+ gSrcAlt=Make(h,L"BUTTON",L"Alt",toggleStyle,718,134,52,32,ID_SRC_ALT);
+ gSrcWin=Make(h,L"BUTTON",L"Win",toggleStyle,776,134,54,32,ID_SRC_WIN);
 
- gAdd=Make(h,L"BUTTON",L"Add mapping",BS_OWNERDRAW,24,220,124,36,ID_ADD);
- gModify=Make(h,L"BUTTON",L"Modify selected",BS_OWNERDRAW,160,220,140,36,ID_MODIFY);
- gRemove=Make(h,L"BUTTON",L"Remove selected",BS_OWNERDRAW,312,220,140,36,ID_REMOVE);
- gBlock=Make(h,L"BUTTON",L"Block source input",BS_AUTOCHECKBOX,480,224,150,28,ID_BLOCK);
+ Make(h,L"STATIC",L"Target",SS_LEFT,24,194,68,22,0);
+ gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,104,184,286,360,ID_TARGET);
+ HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,402,184,94,36,ID_CAP_DST);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,520,194,70,22,0);
+ gDstShift=Make(h,L"BUTTON",L"Shift",toggleStyle,592,186,60,32,ID_DST_SHIFT);
+ gDstCtrl=Make(h,L"BUTTON",L"Ctrl",toggleStyle,658,186,54,32,ID_DST_CTRL);
+ gDstAlt=Make(h,L"BUTTON",L"Alt",toggleStyle,718,186,52,32,ID_DST_ALT);
+ gDstWin=Make(h,L"BUTTON",L"Win",toggleStyle,776,186,54,32,ID_DST_WIN);
 
- Make(h,L"STATIC",L"Mappings",SS_LEFT,24,272,120,24,0);
- gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,24,304,752,260,ID_LIST,0);
+ gAdd=Make(h,L"BUTTON",L"Add mapping",BS_OWNERDRAW,24,244,124,38,ID_ADD);
+ gModify=Make(h,L"BUTTON",L"Modify selected",BS_OWNERDRAW,160,244,142,38,ID_MODIFY);
+ gRemove=Make(h,L"BUTTON",L"Remove selected",BS_OWNERDRAW,314,244,142,38,ID_REMOVE);
+ gBlock=Make(h,L"BUTTON",L"Block source",toggleStyle,486,247,126,32,ID_BLOCK);
+
+ Make(h,L"STATIC",L"Mappings",SS_LEFT,24,308,120,24,0);
+ gListSource=Make(h,L"STATIC",L"Source",SS_LEFT,38,338,220,22,ID_LIST_SOURCE);
+ gListTarget=Make(h,L"STATIC",L"Target",SS_LEFT,438,338,220,22,ID_LIST_TARGET);
+
+ gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOCOLUMNHEADER,24,366,812,250,ID_LIST,0);
  ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
  ListView_SetBkColor(gList,C_SURFACE);
  ListView_SetTextBkColor(gList,C_SURFACE);
  ListView_SetTextColor(gList,C_TEXT);
  LVCOLUMNW col{};col.mask=LVCF_TEXT|LVCF_WIDTH;
- col.pszText=(LPWSTR)L"Source";col.cx=360;ListView_InsertColumn(gList,0,&col);
- col.pszText=(LPWSTR)L"Target";col.cx=360;ListView_InsertColumn(gList,1,&col);
+ col.pszText=(LPWSTR)L"Source";col.cx=400;ListView_InsertColumn(gList,0,&col);
+ col.pszText=(LPWSTR)L"Target";col.cx=400;ListView_InsertColumn(gList,1,&col);
 
- gStartup=Make(h,L"BUTTON",L"Start with Windows",BS_AUTOCHECKBOX,24,576,155,28,ID_STARTUP);
- gStatus=Make(h,L"STATIC",L"",SS_LEFT,196,580,430,24,ID_STATUS);
- gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,684,574,108,34,ID_PAUSE);
+ gEmpty=Make(h,L"STATIC",L"No mappings yet. Add your first mapping above.",SS_CENTER,210,420,480,34,ID_EMPTY);
+ gStartup=Make(h,L"BUTTON",L"Start with Windows",toggleStyle,24,628,162,30,ID_STARTUP);
+ gStatus=Make(h,L"STATIC",L"",SS_LEFT,204,633,500,22,ID_STATUS);
+ gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,796,626,100,34,ID_PAUSE);
 
- HWND labels[]={gTitle,gSubtitle,gSection,gStatus};
  ApplyFont(gTitle,gFontTitle);
  ApplyFont(gSubtitle,gFontSmall);
  ApplyFont(gSection,gFontLabel);
+ ApplyFont(gListSource,gFontLabel);
+ ApplyFont(gListTarget,gFontLabel);
+ ApplyFont(gEmpty,gFontSmall);
  ApplyFont(gStatus,gFontSmall);
 
  HWND controls[]={gSource,cs,gTarget,ct,gBlock,gAdd,gModify,gRemove,gPause,gStartup,
@@ -664,10 +674,12 @@ static void CreateUi(HWND h) {
  for(HWND z:controls) ApplyFont(z,gFontBody);
  ApplyFont(gList,gFontBody);
 
- for(HWND z:{gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin,gBlock,gStartup})
-  SetWindowTheme(z,L"Explorer",nullptr);
+ for(HWND z:{gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin,gBlock,gStartup}) {
+  SetWindowTheme(z,L"DarkMode_Explorer",nullptr);
+ }
+ SetWindowTheme(gSource,L"DarkMode_CFD",nullptr);
+ SetWindowTheme(gTarget,L"DarkMode_CFD",nullptr);
  SetWindowTheme(gList,L"DarkMode_Explorer",nullptr);
- SetWindowTheme(ListView_GetHeader(gList),L"DarkMode_ItemsView",nullptr);
 
  FillCombo(gSource,gSourceChoices);FillCombo(gTarget,gTargetChoices);
  SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
@@ -679,7 +691,6 @@ static void CreateUi(HWND h) {
  RECT rc{};GetClientRect(h,&rc);LayoutUi(rc.right,rc.bottom);
  Refresh();
 }
-
 static void AddMap() {
  Mapping m;
  m.source=ComboCode(gSource,gSourceChoices); m.target=ComboCode(gTarget,gTargetChoices);
