@@ -492,15 +492,16 @@ static void Refresh() {
   ListView_SetItemText(gList,row,1,b.data());
   ++row;
  }
- wchar_t st[160];
+ if(gEmpty) ShowWindow(gEmpty,gMaps.empty()?SW_SHOW:SW_HIDE);
+ wchar_t st[160]{};
+ unsigned count=(unsigned)gMaps.size();
+ const wchar_t* unit=count==1?L"mapping":L"mappings";
  if(!gKeyboard || !gMouse)
-  wsprintfW(st,L"Input hooks unavailable  ·  %u mapping(s)",(unsigned)gMaps.size());
+  wsprintfW(st,L"Input hooks unavailable  |  %u %s",count,unit);
  else if(gPaused)
-  wsprintfW(st,L"Paused  ·  %u mapping(s)",(unsigned)gMaps.size());
- else if(gMaps.empty())
-  lstrcpyW(st,L"Active  ·  No mappings yet");
+  wsprintfW(st,L"Paused  |  %u %s",count,unit);
  else
-  wsprintfW(st,L"Active  ·  %u mapping(s)",(unsigned)gMaps.size());
+  wsprintfW(st,L"Active  |  %u %s",count,unit);
  if(gStatus) SetWindowTextW(gStatus,st);
  if(gPause) SetWindowTextW(gPause,gPaused?L"Resume":L"Pause");
 }
