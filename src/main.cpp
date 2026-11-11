@@ -23,7 +23,9 @@ constexpr int MOUSE_X2 = 0x1005;
 constexpr int WHEEL_UP = 0x1101;
 constexpr int WHEEL_DOWN = 0x1102;
 
-enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_REMOVE, ID_LIST, ID_PAUSE, ID_STATUS };
+enum { ID_SOURCE=100, ID_TARGET, ID_CAP_SRC, ID_CAP_DST, ID_BLOCK, ID_ADD, ID_REMOVE, ID_LIST, ID_PAUSE, ID_STATUS,
+ ID_SRC_SHIFT, ID_SRC_CTRL, ID_SRC_ALT, ID_SRC_WIN, ID_DST_SHIFT, ID_DST_CTRL, ID_DST_ALT, ID_DST_WIN };
+enum ModMask : unsigned { MOD_SHIFT=1, MOD_CTRL=2, MOD_ALT=4, MOD_WIN=8 };
 
 struct Item { int code; const wchar_t* name; };
 static const Item ITEMS[] = {
@@ -31,9 +33,9 @@ static const Item ITEMS[] = {
  {VK_CAPITAL,L"Caps Lock"},{VK_ESCAPE,L"Escape"},{VK_SPACE,L"Space"},{VK_PRIOR,L"Page Up"},
  {VK_NEXT,L"Page Down"},{VK_END,L"End"},{VK_HOME,L"Home"},{VK_LEFT,L"Left Arrow"},
  {VK_UP,L"Up Arrow"},{VK_RIGHT,L"Right Arrow"},{VK_DOWN,L"Down Arrow"},{VK_SNAPSHOT,L"Print Screen"},
- {VK_INSERT,L"Insert"},{VK_DELETE,L"Delete"},{L'0',L"0"},{L'1',L"1"},{L'2',L"2"},
- {L'3',L"3"},{L'4',L"4"},{L'5',L"5"},{L'6',L"6"},{L'7',L"7"},{L'8',L"8"},
- {L'9',L"9"},{L'A',L"A"},{L'B',L"B"},{L'C',L"C"},{L'D',L"D"},{L'E',L"E"},
+ {VK_INSERT,L"Insert"},{VK_DELETE,L"Delete"},{L'0',L"0 / )"},{L'1',L"1 / !"},{L'2',L"2 / @"},
+ {L'3',L"3 / #"},{L'4',L"4 / $"},{L'5',L"5 / %"},{L'6',L"6 / ^"},{L'7',L"7 / &"},{L'8',L"8 / *"},
+ {L'9',L"9 / ("},{L'A',L"A"},{L'B',L"B"},{L'C',L"C"},{L'D',L"D"},{L'E',L"E"},
  {L'F',L"F"},{L'G',L"G"},{L'H',L"H"},{L'I',L"I"},{L'J',L"J"},{L'K',L"K"},
  {L'L',L"L"},{L'M',L"M"},{L'N',L"N"},{L'O',L"O"},{L'P',L"P"},{L'Q',L"Q"},
  {L'R',L"R"},{L'S',L"S"},{L'T',L"T"},{L'U',L"U"},{L'V',L"V"},{L'W',L"W"},
@@ -52,16 +54,24 @@ static const Item ITEMS[] = {
  {VK_NUMLOCK,L"Num Lock"},{VK_SCROLL,L"Scroll Lock"},
  {VK_LSHIFT,L"Left Shift"},{VK_RSHIFT,L"Right Shift"},{VK_LCONTROL,L"Left Ctrl"},
  {VK_RCONTROL,L"Right Ctrl"},{VK_LMENU,L"Left Alt"},{VK_RMENU,L"Right Alt"},
+ {VK_OEM_1,L"; / :"},{VK_OEM_PLUS,L"= / +"},{VK_OEM_COMMA,L", / <"},
+ {VK_OEM_MINUS,L"- / _"},{VK_OEM_PERIOD,L". / >"},{VK_OEM_2,L"/ / ?"},
+ {VK_OEM_3,L"` / ~"},{VK_OEM_4,L"[ / {"},{VK_OEM_5,L"\\ / |"},
+ {VK_OEM_6,L"] / }"},{VK_OEM_7,L"' / \""},{VK_OEM_102,L"OEM 102"},
  {MOUSE_LEFT,L"Mouse Left"},{MOUSE_RIGHT,L"Mouse Right"},{MOUSE_MIDDLE,L"Mouse Middle"},
  {MOUSE_X1,L"Mouse X1"},{MOUSE_X2,L"Mouse X2"},{WHEEL_UP,L"Wheel Up"},{WHEEL_DOWN,L"Wheel Down"}
 };
 
-struct Mapping { int source; int target; bool block; };
+struct Mapping { int source; int target; bool block; unsigned srcMods=0; unsigned dstMods=0; };
 static HINSTANCE gInst;
 static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus;
+static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
 static HHOOK gKeyboard, gMouse;
-static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
+static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false, gSelfTestMode=false;
 static int gCaptureSwallow=0;
+static unsigned gPhysicalMods=0;
+static int gSelfCapturedCode=0;
+static unsigned gSelfCapturedMods=0;
 static std::vector<Mapping> gMaps;
 static std::vector<int> gActive(0x1200,0);
 
