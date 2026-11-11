@@ -907,6 +907,43 @@ static int SelfTest() {
                      (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(listTarget,L"@")==0);
  if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
 
+ // Modify regression: select the row, load it, change target to #, then save.
+ ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+ ModifySelected();
+ bool modifyLoaded=(gEditingIndex==0);
+ SelectChoice(gTarget,gTargetChoices,'3',KRM_SHIFT);
+ SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ AddMap();
+ wchar_t modifiedTarget[64]{};
+ if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,modifiedTarget,64);
+ bool modifyOk=modifyLoaded && gMaps.size()==1 && gMaps[0].target=='3' &&
+               (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(modifiedTarget,L"#")==0;
+ if(!modifyOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 25; }
+
+ // Wheel regression: one 120 detent = one item; two 60 deltas = one item total.
+ ComboBox_SetCurSel(gTarget,0); gTargetWheel.delta=0;
+ int wheelStart=ComboBox_GetCurSel(gTarget);
+ SendMessageW(gTarget,WM_MOUSEWHEEL,MAKEWPARAM(0,(WORD)-WHEEL_DELTA),0);
+ bool wheelFull=(ComboBox_GetCurSel(gTarget)==wheelStart+1);
+ ComboBox_SetCurSel(gTarget,0); gTargetWheel.delta=0;
+ SendMessageW(gTarget,WM_MOUSEWHEEL,MAKEWPARAM(0,(WORD)-60),0);
+ bool wheelHalfFirst=(ComboBox_GetCurSel(gTarget)==0);
+ SendMessageW(gTarget,WM_MOUSEWHEEL,MAKEWPARAM(0,(WORD)-60),0);
+ bool wheelHalfSecond=(ComboBox_GetCurSel(gTarget)==1);
+ if(!(wheelFull&&wheelHalfFirst&&wheelHalfSecond)) {
+  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 26;
+ }
+
+ // Startup regression: toggle HKCU Run and restore the original state.
+ bool startupInitial=StartupEnabled();
+ bool startupOn=SetStartupEnabled(true) && StartupEnabled();
+ bool startupOff=SetStartupEnabled(false) && !StartupEnabled();
+ bool startupRestore=SetStartupEnabled(startupInitial);
+ if(!(startupOn&&startupOff&&startupRestore)) {
+  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 27;
+ }
+ Button_SetCheck(gStartup,startupInitial?BST_CHECKED:BST_UNCHECKED);
+
  if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
 
  gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0; gCaptureSource=true; gCaptureTarget=false;
