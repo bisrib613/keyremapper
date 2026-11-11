@@ -33,9 +33,9 @@ static const Item ITEMS[] = {
  {VK_CAPITAL,L"Caps Lock"},{VK_ESCAPE,L"Escape"},{VK_SPACE,L"Space"},{VK_PRIOR,L"Page Up"},
  {VK_NEXT,L"Page Down"},{VK_END,L"End"},{VK_HOME,L"Home"},{VK_LEFT,L"Left Arrow"},
  {VK_UP,L"Up Arrow"},{VK_RIGHT,L"Right Arrow"},{VK_DOWN,L"Down Arrow"},{VK_SNAPSHOT,L"Print Screen"},
- {VK_INSERT,L"Insert"},{VK_DELETE,L"Delete"},{L'0',L"0 / )"},{L'1',L"1 / !"},{L'2',L"2 / @"},
- {L'3',L"3 / #"},{L'4',L"4 / $"},{L'5',L"5 / %"},{L'6',L"6 / ^"},{L'7',L"7 / &"},{L'8',L"8 / *"},
- {L'9',L"9 / ("},{L'A',L"A"},{L'B',L"B"},{L'C',L"C"},{L'D',L"D"},{L'E',L"E"},
+ {VK_INSERT,L"Insert"},{VK_DELETE,L"Delete"},{L'0',L"0"},{L'1',L"1"},{L'2',L"2"},
+ {L'3',L"3"},{L'4',L"4"},{L'5',L"5"},{L'6',L"6"},{L'7',L"7"},{L'8',L"8"},
+ {L'9',L"9"},{L'A',L"A"},{L'B',L"B"},{L'C',L"C"},{L'D',L"D"},{L'E',L"E"},
  {L'F',L"F"},{L'G',L"G"},{L'H',L"H"},{L'I',L"I"},{L'J',L"J"},{L'K',L"K"},
  {L'L',L"L"},{L'M',L"M"},{L'N',L"N"},{L'O',L"O"},{L'P',L"P"},{L'Q',L"Q"},
  {L'R',L"R"},{L'S',L"S"},{L'T',L"T"},{L'U',L"U"},{L'V',L"V"},{L'W',L"W"},
@@ -54,13 +54,27 @@ static const Item ITEMS[] = {
  {VK_NUMLOCK,L"Num Lock"},{VK_SCROLL,L"Scroll Lock"},
  {VK_LSHIFT,L"Left Shift"},{VK_RSHIFT,L"Right Shift"},{VK_LCONTROL,L"Left Ctrl"},
  {VK_RCONTROL,L"Right Ctrl"},{VK_LMENU,L"Left Alt"},{VK_RMENU,L"Right Alt"},
- {VK_OEM_1,L"; / :"},{VK_OEM_PLUS,L"= / +"},{VK_OEM_COMMA,L", / <"},
- {VK_OEM_MINUS,L"- / _"},{VK_OEM_PERIOD,L". / >"},{VK_OEM_2,L"/ / ?"},
- {VK_OEM_3,L"` / ~"},{VK_OEM_4,L"[ / {"},{VK_OEM_5,L"\\ / |"},
- {VK_OEM_6,L"] / }"},{VK_OEM_7,L"' / \""},{VK_OEM_102,L"OEM 102"},
+ {VK_OEM_1,L";"},{VK_OEM_PLUS,L"="},{VK_OEM_COMMA,L","},
+ {VK_OEM_MINUS,L"-"},{VK_OEM_PERIOD,L"."},{VK_OEM_2,L"/"},
+ {VK_OEM_3,L"`"},{VK_OEM_4,L"["},{VK_OEM_5,L"\\"},
+ {VK_OEM_6,L"]"},{VK_OEM_7,L"' / \""},{VK_OEM_102,L"OEM 102"},
  {MOUSE_LEFT,L"Mouse Left"},{MOUSE_RIGHT,L"Mouse Right"},{MOUSE_MIDDLE,L"Mouse Middle"},
  {MOUSE_X1,L"Mouse X1"},{MOUSE_X2,L"Mouse X2"},{WHEEL_UP,L"Wheel Up"},{WHEEL_DOWN,L"Wheel Down"}
 };
+
+struct SymbolItem { int code; const wchar_t* name; };
+static const SymbolItem SYMBOL_ITEMS[] = {
+ {'1',L"!"},{'2',L"@"},{'3',L"#"},{'4',L"$"},{'5',L"%"},{'6',L"^"},
+ {'7',L"&"},{'8',L"*"},{'9',L"("},{'0',L")"},
+ {VK_OEM_MINUS,L"_"},{VK_OEM_PLUS,L"+"},{VK_OEM_4,L"{"},{VK_OEM_6,L"}"},
+ {VK_OEM_5,L"|"},{VK_OEM_1,L":"},{VK_OEM_7,L"\""},{VK_OEM_COMMA,L"<"},
+ {VK_OEM_PERIOD,L">"},{VK_OEM_2,L"?"},{VK_OEM_3,L"~"}
+};
+static LPARAM EncodeChoice(int code,unsigned mods) {
+ return (LPARAM)((code & 0xFFFF) | ((mods & 0xFF) << 16));
+}
+static int DecodeChoiceCode(LPARAM data) { return (int)(data & 0xFFFF); }
+static unsigned DecodeChoiceMods(LPARAM data) { return (unsigned)((data >> 16) & 0xFF); }
 
 struct Mapping { int source; int target; bool block; unsigned srcMods=0; unsigned dstMods=0; };
 static HINSTANCE gInst;
@@ -113,12 +127,11 @@ static std::wstring Describe(int code,unsigned mods) {
  if(mods&KRM_CTRL) out+=L"Ctrl+";
  if(mods&KRM_ALT) out+=L"Alt+";
  if(mods&KRM_WIN) out+=L"Win+";
- if(mods&KRM_SHIFT) out+=L"Shift+";
- out+=NameOf(code);
- if((mods&KRM_SHIFT) && ShiftSymbol(code)) {
-  out+=L"  (";
-  out+=ShiftSymbol(code);
-  out+=L")";
+ const wchar_t* symbol=((mods&KRM_SHIFT)?ShiftSymbol(code):nullptr);
+ if(symbol) out+=symbol;
+ else {
+  if(mods&KRM_SHIFT) out+=L"Shift+";
+  out+=NameOf(code);
  }
  return out;
 }
@@ -271,9 +284,32 @@ static void Load() {
   gMaps.push_back({src,dst,block!=0,sm,dm});
  }
 }
-static int ComboCode(HWND h) {int i=ComboBox_GetCurSel(h);return i==CB_ERR?0:(int)ComboBox_GetItemData(h,i);}
-static void SelectCode(HWND h,int code){for(int i=0;i<ComboBox_GetCount(h);++i)if((int)ComboBox_GetItemData(h,i)==code){ComboBox_SetCurSel(h,i);break;}}
-static void FillCombo(HWND h){for(auto&i:ITEMS){int n=ComboBox_AddString(h,i.name);ComboBox_SetItemData(h,n,i.code);}}
+static LPARAM ComboChoice(HWND h) {
+ int i=ComboBox_GetCurSel(h);
+ return i==CB_ERR?0:ComboBox_GetItemData(h,i);
+}
+static int ComboCode(HWND h) { return DecodeChoiceCode(ComboChoice(h)); }
+static unsigned ComboImpliedMods(HWND h) { return DecodeChoiceMods(ComboChoice(h)); }
+static void SelectChoice(HWND h,int code,unsigned mods) {
+ for(int i=0;i<ComboBox_GetCount(h);++i) {
+  LPARAM d=ComboBox_GetItemData(h,i);
+  if(DecodeChoiceCode(d)==code && DecodeChoiceMods(d)==mods) { ComboBox_SetCurSel(h,i); return; }
+ }
+ for(int i=0;i<ComboBox_GetCount(h);++i) {
+  LPARAM d=ComboBox_GetItemData(h,i);
+  if(DecodeChoiceCode(d)==code && DecodeChoiceMods(d)==0) { ComboBox_SetCurSel(h,i); return; }
+ }
+}
+static void FillCombo(HWND h) {
+ for(auto&i:ITEMS) {
+  int n=ComboBox_AddString(h,i.name);
+  ComboBox_SetItemData(h,n,EncodeChoice(i.code,0));
+ }
+ for(auto&i:SYMBOL_ITEMS) {
+  int n=ComboBox_AddString(h,i.name);
+  ComboBox_SetItemData(h,n,EncodeChoice(i.code,KRM_SHIFT));
+ }
+}
 static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
  unsigned m=0;
  if(Button_GetCheck(sh)==BST_CHECKED)m|=KRM_SHIFT;
@@ -331,14 +367,14 @@ static void CreateUi(HWND h) {
  HWND controls[]={gSource,cs,gTarget,ct,gBlock,add,rem,gPause,gList,gStatus,
   gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
  for(HWND z:controls)SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);
- FillCombo(gSource);FillCombo(gTarget);SelectCode(gSource,VK_CAPITAL);SelectCode(gTarget,VK_ESCAPE);Refresh();
+ FillCombo(gSource);FillCombo(gTarget);SelectChoice(gSource,VK_CAPITAL,0);SelectChoice(gTarget,VK_ESCAPE,0);Refresh();
 }
 static void AddMap() {
  Mapping m;
  m.source=ComboCode(gSource); m.target=ComboCode(gTarget);
  m.block=Button_GetCheck(gBlock)==BST_CHECKED;
- m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
- m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin) | ComboImpliedMods(gSource);
+ m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget);
  if(!m.source||(!m.block&&!m.target))return;
  for(auto&x:gMaps)if(x.source==m.source && x.srcMods==m.srcMods){x=m;Save();Refresh();return;}
  gMaps.push_back(m);Save();Refresh();
@@ -366,9 +402,9 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    unsigned mods=(unsigned)((ULONG_PTR)l>>1);
    if(gSelfTestMode) { gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0; }
    if(code==VK_ESCAPE){Refresh();return 0;}
-   SelectCode(src?gSource:gTarget,code);
-   if(src) SetModChecks(mods,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
-   else SetModChecks(mods,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+   SelectChoice(src?gSource:gTarget,code,mods&KRM_SHIFT);
+   if(src) SetModChecks(mods & ~ComboImpliedMods(gSource),gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+   else SetModChecks(mods & ~ComboImpliedMods(gTarget),gDstShift,gDstCtrl,gDstAlt,gDstWin);
    Refresh();return 0;}
   case WM_CLOSE:DestroyWindow(h);return 0;
   case WM_DESTROY:Save();Unhook();PostQuitMessage(0);return 0;
