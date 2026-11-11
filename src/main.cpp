@@ -79,6 +79,48 @@ static std::wstring NameOf(int code) {
  for (auto &i:ITEMS) if(i.code==code) return i.name;
  wchar_t b[32]; wsprintfW(b,L"0x%X",code); return b;
 }
+static unsigned ModBitForVk(int vk) {
+ switch(vk) {
+  case VK_LSHIFT: case VK_RSHIFT: return MOD_SHIFT;
+  case VK_LCONTROL: case VK_RCONTROL: return MOD_CTRL;
+  case VK_LMENU: case VK_RMENU: return MOD_ALT;
+  case VK_LWIN: case VK_RWIN: return MOD_WIN;
+  default: return 0;
+ }
+}
+static int VkForMod(unsigned bit) {
+ if(bit==MOD_SHIFT) return VK_SHIFT;
+ if(bit==MOD_CTRL) return VK_CONTROL;
+ if(bit==MOD_ALT) return VK_MENU;
+ if(bit==MOD_WIN) return VK_LWIN;
+ return 0;
+}
+static const wchar_t* ShiftSymbol(int code) {
+ switch(code) {
+  case '1': return L"!"; case '2': return L"@"; case '3': return L"#"; case '4': return L"$";
+  case '5': return L"%"; case '6': return L"^"; case '7': return L"&"; case '8': return L"*";
+  case '9': return L"("; case '0': return L")"; case VK_OEM_1: return L":";
+  case VK_OEM_PLUS: return L"+"; case VK_OEM_COMMA: return L"<"; case VK_OEM_MINUS: return L"_";
+  case VK_OEM_PERIOD: return L">"; case VK_OEM_2: return L"?"; case VK_OEM_3: return L"~";
+  case VK_OEM_4: return L"{"; case VK_OEM_5: return L"|"; case VK_OEM_6: return L"}";
+  case VK_OEM_7: return L"\"";
+  default: return nullptr;
+ }
+}
+static std::wstring Describe(int code,unsigned mods) {
+ std::wstring out;
+ if(mods&MOD_CTRL) out+=L"Ctrl+";
+ if(mods&MOD_ALT) out+=L"Alt+";
+ if(mods&MOD_WIN) out+=L"Win+";
+ if(mods&MOD_SHIFT) out+=L"Shift+";
+ out+=NameOf(code);
+ if((mods&MOD_SHIFT) && ShiftSymbol(code)) {
+  out+=L"  (";
+  out+=ShiftSymbol(code);
+  out+=L")";
+ }
+ return out;
+}
 static bool Extended(int vk) {
  switch(vk) {
   case VK_RMENU:case VK_RCONTROL:case VK_INSERT:case VK_DELETE:case VK_HOME:case VK_END:
@@ -109,14 +151,17 @@ static void SendCode(int code,bool down) {
 }
 static Mapping* FindMap(int src) {
  if(gPaused) return nullptr;
- for(auto &m:gMaps) if(m.source==src) return &m;
+ for(auto &m:gMaps) if(m.source==src && m.srcMods==gPhysicalMods) return &m;
  return nullptr;
 }
 static bool Handle(int src,bool down,bool pulse=false) {
+ unsigned modBit=ModBitForVk(src);
  if(gCaptureSource||gCaptureTarget) {
+  if(modBit) return true;
   if(down||pulse) {
-   bool s=gCaptureSource; gCaptureSource=gCaptureTarget=false; gCaptureSwallow=pulse?0:src;
-   PostMessageW(gWnd,WM_KR_CAPTURE,src,s?0:1); return true;
+   bool sourceCapture=gCaptureSource; gCaptureSource=gCaptureTarget=false; gCaptureSwallow=pulse?0:src;
+   LPARAM packed=(LPARAM)((gPhysicalMods<<1)|(sourceCapture?0:1));
+   PostMessageW(gWnd,WM_KR_CAPTURE,src,packed); return true;
   }
   return false;
  }
@@ -136,9 +181,15 @@ static bool Handle(int src,bool down,bool pulse=false) {
 static LRESULT CALLBACK KeyHook(int n,WPARAM w,LPARAM l) {
  if(n<0)return CallNextHookEx(gKeyboard,n,w,l);
  auto*k=(KBDLLHOOKSTRUCT*)l;
- if((k->flags&LLKHF_INJECTED)||k->dwExtraInfo==KR_MAGIC)return CallNextHookEx(gKeyboard,n,w,l);
+ if(!gSelfTestMode && ((k->flags&LLKHF_INJECTED)||k->dwExtraInfo==KR_MAGIC))
+  return CallNextHookEx(gKeyboard,n,w,l);
  bool d=w==WM_KEYDOWN||w==WM_SYSKEYDOWN,u=w==WM_KEYUP||w==WM_SYSKEYUP;
- if((d||u)&&Handle((int)k->vkCode,d))return 1;
+ if(!d&&!u) return CallNextHookEx(gKeyboard,n,w,l);
+ unsigned bit=ModBitForVk((int)k->vkCode);
+ if(bit) {
+  if(d) gPhysicalMods|=bit; else gPhysicalMods&=~bit;
+ }
+ if(Handle((int)k->vkCode,d))return 1;
  return CallNextHookEx(gKeyboard,n,w,l);
 }
 static LRESULT CALLBACK MouseHook(int n,WPARAM w,LPARAM l) {
