@@ -1,24 +1,30 @@
 #define AppName "Key Remapper"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
+
 [Setup]
-AppId={{A7BCA535-FA88-499C-A291-B928A0CB6E09}
+AppId={{B0F2EDC4-65D9-4E6A-B8C4-23D41B532C6E}
 AppName={#AppName}
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\Key Remapper
+AppPublisher=bisrib613
+DefaultDirName={autopf}\Key Remapper
 DefaultGroupName=Key Remapper
 OutputDir=..\dist
 OutputBaseFilename=KeyRemapper_Setup
-Compression=lzma2
+Compression=lzma2/max
 SolidCompression=yes
-PrivilegesRequired=lowest
-ArchitecturesAllowed=x64compatible
+PrivilegesRequired=admin
 UninstallDisplayIcon={app}\KeyRemapper.exe
+WizardStyle=modern
+
 [Files]
-Source: "..\publish\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\build\KeyRemapper.exe"; DestDir: "{app}"; Flags: ignoreversion
+
 [Tasks]
-Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
+
 [Icons]
 Name: "{autoprograms}\Key Remapper"; Filename: "{app}\KeyRemapper.exe"
 Name: "{autodesktop}\Key Remapper"; Filename: "{app}\KeyRemapper.exe"; Tasks: desktopicon
+
 [Run]
 Filename: "{app}\KeyRemapper.exe"; Description: "Run Key Remapper"; Flags: nowait postinstall skipifsilent
