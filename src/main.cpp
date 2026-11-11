@@ -478,53 +478,193 @@ static void ModifySelected() {
  LoadMappingIntoEditor(index);
 }
 static void Refresh() {
- ListView_DeleteAllItems(gList);int row=0;
+ ListView_DeleteAllItems(gList);
+ int row=0;
  for(auto&m:gMaps) {
-  std::wstring a=Describe(m.source,m.srcMods),b=m.block?L"[Blocked]":Describe(m.target,m.dstMods);
+  std::wstring a=Describe(m.source,m.srcMods);
+  std::wstring b=m.block?L"Blocked":Describe(m.target,m.dstMods);
   LVITEMW it{};it.mask=LVIF_TEXT|LVIF_PARAM;it.iItem=row;it.pszText=a.data();it.lParam=(LPARAM)&m;
-  ListView_InsertItem(gList,&it);ListView_SetItemText(gList,row,1,b.data());++row;
+  ListView_InsertItem(gList,&it);
+  ListView_SetItemText(gList,row,1,b.data());
+  ++row;
  }
- wchar_t st[128];wsprintfW(st,L"%s | %u mapping(s) | keyboard hook: %s | mouse hook: %s",
-  gPaused?L"PAUSED":L"ACTIVE",(unsigned)gMaps.size(),gKeyboard?L"OK":L"FAILED",gMouse?L"OK":L"FAILED");
- SetWindowTextW(gStatus,st);SetWindowTextW(gPause,gPaused?L"Resume":L"Pause");
+ wchar_t st[160];
+ if(!gKeyboard || !gMouse)
+  wsprintfW(st,L"Input hooks unavailable  ·  %u mapping(s)",(unsigned)gMaps.size());
+ else if(gPaused)
+  wsprintfW(st,L"Paused  ·  %u mapping(s)",(unsigned)gMaps.size());
+ else if(gMaps.empty())
+  lstrcpyW(st,L"Active  ·  No mappings yet");
+ else
+  wsprintfW(st,L"Active  ·  %u mapping(s)",(unsigned)gMaps.size());
+ if(gStatus) SetWindowTextW(gStatus,st);
+ if(gPause) SetWindowTextW(gPause,gPaused?L"Resume":L"Pause");
 }
+
 static HWND Make(HWND p,const wchar_t*c,const wchar_t*t,DWORD s,int x,int y,int w,int h,int id,DWORD ex=0) {
  return CreateWindowExW(ex,c,t,s|WS_CHILD|WS_VISIBLE,x,y,w,h,p,(HMENU)(INT_PTR)id,gInst,nullptr);
 }
+
+static HFONT MakeUiFont(HWND h,int px,int weight) {
+ UINT dpi=GetDpiForWindow(h);
+ return CreateFontW(-MulDiv(px,(int)dpi,96),0,0,0,weight,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+  OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_DONTCARE,L"Manrope");
+}
+
+static void EnsureUiResources(HWND h) {
+ if(!gBrushBg) gBrushBg=CreateSolidBrush(C_BG);
+ if(!gBrushSurface) gBrushSurface=CreateSolidBrush(C_SURFACE);
+ if(!gBrushControl) gBrushControl=CreateSolidBrush(C_CONTROL);
+ if(!gFontBody) gFontBody=MakeUiFont(h,16,FW_MEDIUM);
+ if(!gFontSmall) gFontSmall=MakeUiFont(h,14,FW_NORMAL);
+ if(!gFontLabel) gFontLabel=MakeUiFont(h,14,FW_SEMIBOLD);
+ if(!gFontTitle) gFontTitle=MakeUiFont(h,24,FW_SEMIBOLD);
+}
+
+static void ApplyFont(HWND h,HFONT font) {
+ if(h && font) SendMessageW(h,WM_SETFONT,(WPARAM)font,TRUE);
+}
+
+static void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
+ RECT r=d->rcItem;
+ bool primary=d->CtlID==ID_ADD;
+ bool pressed=(d->itemState&ODS_SELECTED)!=0;
+ bool disabled=(d->itemState&ODS_DISABLED)!=0;
+ COLORREF fill=primary?C_TEXT:C_CONTROL;
+ COLORREF text=primary?C_BG:C_TEXT;
+ if(pressed) fill=primary?C_MUTED:C_HOVER;
+ if(disabled) { fill=C_SURFACE; text=C_MUTED; }
+
+ HBRUSH brush=CreateSolidBrush(fill);
+ HPEN pen=CreatePen(PS_SOLID,1,primary?fill:C_BORDER);
+ HGDIOBJ oldBrush=SelectObject(d->hDC,brush);
+ HGDIOBJ oldPen=SelectObject(d->hDC,pen);
+ RoundRect(d->hDC,r.left,r.top,r.right,r.bottom,8,8);
+ SelectObject(d->hDC,oldBrush);
+ SelectObject(d->hDC,oldPen);
+ DeleteObject(brush);DeleteObject(pen);
+
+ wchar_t textBuf[128]{};
+ GetWindowTextW(d->hwndItem,textBuf,128);
+ SetBkMode(d->hDC,TRANSPARENT);
+ SetTextColor(d->hDC,text);
+ HFONT oldFont=(HFONT)SelectObject(d->hDC,gFontLabel?gFontLabel:GetStockObject(DEFAULT_GUI_FONT));
+ DrawTextW(d->hDC,textBuf,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ SelectObject(d->hDC,oldFont);
+
+ if(d->itemState&ODS_FOCUS) {
+  RECT focus=r;InflateRect(&focus,-4,-4);
+  DrawFocusRect(d->hDC,&focus);
+ }
+}
+
+static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
+ FillRect(d->hDC,&d->rcItem,gBrushControl);
+ if(d->itemID==(UINT)-1) return;
+ wchar_t buf[128]{};
+ SendMessageW(d->hwndItem,CB_GETLBTEXT,d->itemID,(LPARAM)buf);
+ RECT r=d->rcItem;
+ if(d->itemState&ODS_SELECTED) {
+  HBRUSH selected=CreateSolidBrush(C_HOVER);
+  FillRect(d->hDC,&r,selected);
+  DeleteObject(selected);
+ }
+ r.left+=12;r.right-=8;
+ SetBkMode(d->hDC,TRANSPARENT);
+ SetTextColor(d->hDC,C_TEXT);
+ HFONT old=(HFONT)SelectObject(d->hDC,gFontBody?gFontBody:GetStockObject(DEFAULT_GUI_FONT));
+ DrawTextW(d->hDC,buf,-1,&r,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+ SelectObject(d->hDC,old);
+}
+
+static void LayoutUi(int width,int height) {
+ if(!gList) return;
+ int listTop=304;
+ int footerHeight=56;
+ int listBottom=std::max(listTop+160,height-footerHeight-16);
+ int listWidth=std::max(520,width-48);
+ MoveWindow(gList,24,listTop,listWidth,listBottom-listTop,TRUE);
+ int footerY=height-48;
+ if(gStartup) MoveWindow(gStartup,24,footerY,155,28,TRUE);
+ if(gStatus) MoveWindow(gStatus,196,footerY+4,std::max(220,width-196-150-40),24,TRUE);
+ if(gPause) MoveWindow(gPause,width-132,footerY-2,108,34,TRUE);
+ ListView_SetColumnWidth(gList,0,std::max(220,(listWidth-4)/2));
+ ListView_SetColumnWidth(gList,1,std::max(220,listWidth-4-ListView_GetColumnWidth(gList,0)));
+}
+
 static void CreateUi(HWND h) {
- HFONT font=(HFONT)GetStockObject(DEFAULT_GUI_FONT);
- auto label=[&](const wchar_t*t,int x,int y,int w){HWND z=Make(h,L"STATIC",t,SS_LEFT,x,y,w,22,0);SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);};
- label(L"Source",18,24,55);gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,78,18,230,300,ID_SOURCE);
- HWND cs=Make(h,L"BUTTON",L"Capture",BS_PUSHBUTTON,318,18,85,28,ID_CAP_SRC);
- label(L"Mods",420,24,38);
- gSrcShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,462,19,60,26,ID_SRC_SHIFT);
- gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,522,19,52,26,ID_SRC_CTRL);
- gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,574,19,48,26,ID_SRC_ALT);
- gSrcWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,622,19,52,26,ID_SRC_WIN);
- label(L"Target",18,68,55);gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|WS_VSCROLL,78,62,230,300,ID_TARGET);
- HWND ct=Make(h,L"BUTTON",L"Capture",BS_PUSHBUTTON,318,62,85,28,ID_CAP_DST);
- label(L"Mods",420,68,38);
- gDstShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,462,63,60,26,ID_DST_SHIFT);
- gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,522,63,52,26,ID_DST_CTRL);
- gDstAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,574,63,48,26,ID_DST_ALT);
- gDstWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,622,63,52,26,ID_DST_WIN);
- gBlock=Make(h,L"BUTTON",L"Block source",BS_AUTOCHECKBOX,430,110,115,26,ID_BLOCK);
- HWND add=Make(h,L"BUTTON",L"Add / Update",BS_DEFPUSHBUTTON,18,110,130,32,ID_ADD);
- HWND rem=Make(h,L"BUTTON",L"Remove selected",BS_PUSHBUTTON,158,110,140,32,ID_REMOVE);
- gPause=Make(h,L"BUTTON",L"Pause",BS_PUSHBUTTON,555,110,115,32,ID_PAUSE);
- gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,18,160,656,270,ID_LIST,WS_EX_CLIENTEDGE);
- ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_GRIDLINES|LVS_EX_DOUBLEBUFFER);
- LVCOLUMNW col{};col.mask=LVCF_TEXT|LVCF_WIDTH;col.pszText=(LPWSTR)L"Source";col.cx=250;ListView_InsertColumn(gList,0,&col);
- col.pszText=(LPWSTR)L"Target";col.cx=380;ListView_InsertColumn(gList,1,&col);
- gStatus=Make(h,L"STATIC",L"",SS_LEFT,18,445,530,24,ID_STATUS);
- HWND controls[]={gSource,cs,gTarget,ct,gBlock,add,rem,gPause,gList,gStatus,
+ EnsureUiResources(h);
+ BOOL dark=TRUE;
+ DwmSetWindowAttribute(h,20,&dark,sizeof(dark));
+
+ gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,24,18,420,34,ID_TITLE);
+ gSubtitle=Make(h,L"STATIC",L"Map keyboard and mouse input without changing hardware drivers.",SS_LEFT,24,50,620,24,ID_SUBTITLE);
+ gSection=Make(h,L"STATIC",L"Mapping editor",SS_LEFT,24,88,180,24,ID_SECTION);
+
+ Make(h,L"STATIC",L"Source",SS_LEFT,24,126,64,24,0);
+ gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,118,250,360,ID_SOURCE);
+ HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,358,118,88,34,ID_CAP_SRC);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,466,126,70,24,0);
+ gSrcShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,540,120,62,28,ID_SRC_SHIFT);
+ gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,606,120,54,28,ID_SRC_CTRL);
+ gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,664,120,50,28,ID_SRC_ALT);
+ gSrcWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,718,120,54,28,ID_SRC_WIN);
+
+ Make(h,L"STATIC",L"Target",SS_LEFT,24,174,64,24,0);
+ gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,166,250,360,ID_TARGET);
+ HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,358,166,88,34,ID_CAP_DST);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,466,174,70,24,0);
+ gDstShift=Make(h,L"BUTTON",L"Shift",BS_AUTOCHECKBOX,540,168,62,28,ID_DST_SHIFT);
+ gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_AUTOCHECKBOX,606,168,54,28,ID_DST_CTRL);
+ gDstAlt=Make(h,L"BUTTON",L"Alt",BS_AUTOCHECKBOX,664,168,50,28,ID_DST_ALT);
+ gDstWin=Make(h,L"BUTTON",L"Win",BS_AUTOCHECKBOX,718,168,54,28,ID_DST_WIN);
+
+ gAdd=Make(h,L"BUTTON",L"Add mapping",BS_OWNERDRAW,24,220,124,36,ID_ADD);
+ gModify=Make(h,L"BUTTON",L"Modify selected",BS_OWNERDRAW,160,220,140,36,ID_MODIFY);
+ gRemove=Make(h,L"BUTTON",L"Remove selected",BS_OWNERDRAW,312,220,140,36,ID_REMOVE);
+ gBlock=Make(h,L"BUTTON",L"Block source input",BS_AUTOCHECKBOX,480,224,150,28,ID_BLOCK);
+
+ Make(h,L"STATIC",L"Mappings",SS_LEFT,24,272,120,24,0);
+ gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,24,304,752,260,ID_LIST,0);
+ ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
+ ListView_SetBkColor(gList,C_SURFACE);
+ ListView_SetTextBkColor(gList,C_SURFACE);
+ ListView_SetTextColor(gList,C_TEXT);
+ LVCOLUMNW col{};col.mask=LVCF_TEXT|LVCF_WIDTH;
+ col.pszText=(LPWSTR)L"Source";col.cx=360;ListView_InsertColumn(gList,0,&col);
+ col.pszText=(LPWSTR)L"Target";col.cx=360;ListView_InsertColumn(gList,1,&col);
+
+ gStartup=Make(h,L"BUTTON",L"Start with Windows",BS_AUTOCHECKBOX,24,576,155,28,ID_STARTUP);
+ gStatus=Make(h,L"STATIC",L"",SS_LEFT,196,580,430,24,ID_STATUS);
+ gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,684,574,108,34,ID_PAUSE);
+
+ HWND labels[]={gTitle,gSubtitle,gSection,gStatus};
+ ApplyFont(gTitle,gFontTitle);
+ ApplyFont(gSubtitle,gFontSmall);
+ ApplyFont(gSection,gFontLabel);
+ ApplyFont(gStatus,gFontSmall);
+
+ HWND controls[]={gSource,cs,gTarget,ct,gBlock,gAdd,gModify,gRemove,gPause,gStartup,
   gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
- for(HWND z:controls)SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);
+ for(HWND z:controls) ApplyFont(z,gFontBody);
+ ApplyFont(gList,gFontBody);
+
+ for(HWND z:{gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin,gBlock,gStartup})
+  SetWindowTheme(z,L"Explorer",nullptr);
+ SetWindowTheme(gList,L"DarkMode_Explorer",nullptr);
+ SetWindowTheme(ListView_GetHeader(gList),L"DarkMode_ItemsView",nullptr);
+
  FillCombo(gSource,gSourceChoices);FillCombo(gTarget,gTargetChoices);
  SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
  SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
+ InstallStableComboWheel(gSource,gSourceWheel);
+ InstallStableComboWheel(gTarget,gTargetWheel);
+ Button_SetCheck(gStartup,StartupEnabled()?BST_CHECKED:BST_UNCHECKED);
+
+ RECT rc{};GetClientRect(h,&rc);LayoutUi(rc.right,rc.bottom);
  Refresh();
 }
+
 static void AddMap() {
  Mapping m;
  m.source=ComboCode(gSource,gSourceChoices); m.target=ComboCode(gTarget,gTargetChoices);
