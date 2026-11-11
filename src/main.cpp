@@ -455,6 +455,7 @@ static int SelectedMappingIndex() {
 static void ResetEditorState() {
  gEditingIndex=-1;
  if(gAdd) SetWindowTextW(gAdd,L"Add mapping");
+ if(gSection) SetWindowTextW(gSection,L"Create mapping");
 }
 static void LoadMappingIntoEditor(int index) {
  if(index<0 || index>=(int)gMaps.size()) return;
@@ -469,6 +470,7 @@ static void LoadMappingIntoEditor(int index) {
  EnableWindow(gTarget,!m.block);
  gEditingIndex=index;
  if(gAdd) SetWindowTextW(gAdd,L"Save changes");
+ if(gSection) SetWindowTextW(gSection,L"Edit mapping");
  if(gStatus) SetWindowTextW(gStatus,L"Editing selected mapping");
 }
 static void ModifySelected() {
