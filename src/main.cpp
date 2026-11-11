@@ -458,8 +458,24 @@ static int SelfTest() {
  WNDCLASSEXW wc{sizeof(wc)};
  wc.hInstance=gInst; wc.lpfnWndProc=SelfTestWndProc; wc.lpszClassName=L"KRNativeSelfTest";
  RegisterClassExW(&wc);
- gWnd=CreateWindowExW(0,wc.lpszClassName,L"",0,0,0,0,0,HWND_MESSAGE,nullptr,gInst,nullptr);
+ gWnd=CreateWindowExW(0,wc.lpszClassName,L"",WS_OVERLAPPED,0,0,715,525,nullptr,nullptr,gInst,nullptr);
  if(!gWnd) return 20;
+
+ // UI-selection test: choose @ directly in the Target combo, then Add/Update.
+ CreateUi(gWnd);
+ SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
+ SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
+ SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ Button_SetCheck(gBlock,BST_UNCHECKED);
+ gMaps.clear();
+ AddMap();
+ wchar_t listTarget[64]{};
+ if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,listTarget,64);
+ bool uiSelectionOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
+                     (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(listTarget,L"@")==0);
+ if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
+
  if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
 
  gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0; gCaptureSource=true; gCaptureTarget=false;
