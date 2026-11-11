@@ -73,7 +73,8 @@ static unsigned gPhysicalMods=0;
 static int gSelfCapturedCode=0;
 static unsigned gSelfCapturedMods=0;
 static std::vector<Mapping> gMaps;
-static std::vector<int> gActive(0x1200,0);
+struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; };
+static std::vector<ActiveEmission> gActive(0x1200);
 
 static std::wstring NameOf(int code) {
  for (auto &i:ITEMS) if(i.code==code) return i.name;
@@ -149,6 +150,29 @@ static void SendCode(int code,bool down) {
  }
  SendInput(1,&in,sizeof(in));
 }
+static ActiveEmission BeginTarget(const Mapping& m) {
+ ActiveEmission a{}; a.target=m.target;
+ unsigned all[]={MOD_SHIFT,MOD_CTRL,MOD_ALT,MOD_WIN};
+ for(unsigned bit:all) {
+  if((gPhysicalMods&bit) && !(m.dstMods&bit)) {
+   SendCode(VkForMod(bit),false); a.suppressed|=bit;
+  }
+ }
+ for(unsigned bit:all) {
+  if((m.dstMods&bit) && !(gPhysicalMods&bit)) {
+   SendCode(VkForMod(bit),true); a.synthetic|=bit;
+  }
+ }
+ SendCode(m.target,true);
+ return a;
+}
+static void EndTarget(const ActiveEmission& a) {
+ if(!a.target)return;
+ SendCode(a.target,false);
+ unsigned all[]={MOD_WIN,MOD_ALT,MOD_CTRL,MOD_SHIFT};
+ for(unsigned bit:all) if(a.synthetic&bit) SendCode(VkForMod(bit),false);
+ for(unsigned bit:all) if((a.suppressed&bit)&&(gPhysicalMods&bit)) SendCode(VkForMod(bit),true);
+}
 static Mapping* FindMap(int src) {
  if(gPaused) return nullptr;
  for(auto &m:gMaps) if(m.source==src && m.srcMods==gPhysicalMods) return &m;
@@ -167,15 +191,22 @@ static bool Handle(int src,bool down,bool pulse=false) {
  }
  if(gCaptureSwallow==src) { if(!down)gCaptureSwallow=0; return true; }
  Mapping* m=FindMap(src); if(!m)return false; if(m->block)return true;
- if(pulse) { SendCode(m->target,true); SendCode(m->target,false); return true; }
+ if(pulse) {
+  ActiveEmission a=BeginTarget(*m);
+  EndTarget(a);
+  return true;
+ }
  if(src>=0 && src<(int)gActive.size()) {
   if(down) {
-   if(!gActive[src]) { gActive[src]=m->target; SendCode(m->target,true); }
+   if(!gActive[src].target) gActive[src]=BeginTarget(*m);
    else if(m->target<0x1000) SendCode(m->target,true);
   } else {
-   int target=gActive[src]?gActive[src]:m->target; SendCode(target,false); gActive[src]=0;
+   if(gActive[src].target) { EndTarget(gActive[src]); gActive[src]=ActiveEmission{}; }
+   else { ActiveEmission a=BeginTarget(*m); EndTarget(a); }
   }
- } else { SendCode(m->target,down); }
+ } else {
+  if(down) { ActiveEmission a=BeginTarget(*m); gActive[0]=a; }
+ }
  return true;
 }
 static LRESULT CALLBACK KeyHook(int n,WPARAM w,LPARAM l) {
@@ -214,7 +245,7 @@ static bool InstallHooks() {
  return gKeyboard&&gMouse;
 }
 static void Unhook() {
- for(size_t i=0;i<gActive.size();++i)if(gActive[i])SendCode(gActive[i],false);
+ for(size_t i=0;i<gActive.size();++i)if(gActive[i].target)EndTarget(gActive[i]);
  if(gKeyboard)UnhookWindowsHookEx(gKeyboard);if(gMouse)UnhookWindowsHookEx(gMouse);
  gKeyboard=gMouse=nullptr;
 }
