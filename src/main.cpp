@@ -70,13 +70,10 @@ static const SymbolItem SYMBOL_ITEMS[] = {
  {VK_OEM_5,L"|"},{VK_OEM_1,L":"},{VK_OEM_7,L"\""},{VK_OEM_COMMA,L"<"},
  {VK_OEM_PERIOD,L">"},{VK_OEM_2,L"?"},{VK_OEM_3,L"~"}
 };
-static LPARAM EncodeChoice(int code,unsigned mods) {
- return (LPARAM)((code & 0xFFFF) | ((mods & 0xFF) << 16));
-}
-static int DecodeChoiceCode(LPARAM data) { return (int)(data & 0xFFFF); }
-static unsigned DecodeChoiceMods(LPARAM data) { return (unsigned)((data >> 16) & 0xFF); }
-
 struct Mapping { int source; int target; bool block; unsigned srcMods=0; unsigned dstMods=0; };
+struct Choice { int code=0; unsigned mods=0; };
+static std::vector<Choice> gSourceChoices;
+static std::vector<Choice> gTargetChoices;
 static HINSTANCE gInst;
 static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus;
 static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
@@ -304,30 +301,40 @@ static void Load() {
   gMaps.push_back({src,dst,block!=0,sm,dm});
  }
 }
-static LPARAM ComboChoice(HWND h) {
+static Choice SelectedChoice(HWND h,const std::vector<Choice>& choices) {
  int i=ComboBox_GetCurSel(h);
- return i==CB_ERR?0:ComboBox_GetItemData(h,i);
+ if(i==CB_ERR || i<0 || (size_t)i>=choices.size()) return {};
+ return choices[(size_t)i];
 }
-static int ComboCode(HWND h) { return DecodeChoiceCode(ComboChoice(h)); }
-static unsigned ComboImpliedMods(HWND h) { return DecodeChoiceMods(ComboChoice(h)); }
-static void SelectChoice(HWND h,int code,unsigned mods) {
- for(int i=0;i<ComboBox_GetCount(h);++i) {
-  LPARAM d=ComboBox_GetItemData(h,i);
-  if(DecodeChoiceCode(d)==code && DecodeChoiceMods(d)==mods) { ComboBox_SetCurSel(h,i); return; }
+static int ComboCode(HWND h,const std::vector<Choice>& choices) {
+ return SelectedChoice(h,choices).code;
+}
+static unsigned ComboImpliedMods(HWND h,const std::vector<Choice>& choices) {
+ return SelectedChoice(h,choices).mods;
+}
+static void SelectChoice(HWND h,const std::vector<Choice>& choices,int code,unsigned mods) {
+ for(size_t i=0;i<choices.size();++i) {
+  if(choices[i].code==code && choices[i].mods==mods) {
+   ComboBox_SetCurSel(h,(int)i); return;
+  }
  }
- for(int i=0;i<ComboBox_GetCount(h);++i) {
-  LPARAM d=ComboBox_GetItemData(h,i);
-  if(DecodeChoiceCode(d)==code && DecodeChoiceMods(d)==0) { ComboBox_SetCurSel(h,i); return; }
+ for(size_t i=0;i<choices.size();++i) {
+  if(choices[i].code==code && choices[i].mods==0) {
+   ComboBox_SetCurSel(h,(int)i); return;
+  }
  }
 }
-static void FillCombo(HWND h) {
+static void FillCombo(HWND h,std::vector<Choice>& choices) {
+ ComboBox_ResetContent(h);
+ choices.clear();
+ choices.reserve((sizeof(ITEMS)/sizeof(ITEMS[0]))+(sizeof(SYMBOL_ITEMS)/sizeof(SYMBOL_ITEMS[0])));
  for(auto&i:ITEMS) {
-  int n=ComboBox_AddString(h,i.name);
-  ComboBox_SetItemData(h,n,EncodeChoice(i.code,0));
+  ComboBox_AddString(h,i.name);
+  choices.push_back({i.code,0});
  }
  for(auto&i:SYMBOL_ITEMS) {
-  int n=ComboBox_AddString(h,i.name);
-  ComboBox_SetItemData(h,n,EncodeChoice(i.code,KRM_SHIFT));
+  ComboBox_AddString(h,i.name);
+  choices.push_back({i.code,KRM_SHIFT});
  }
 }
 static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
@@ -387,14 +394,17 @@ static void CreateUi(HWND h) {
  HWND controls[]={gSource,cs,gTarget,ct,gBlock,add,rem,gPause,gList,gStatus,
   gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
  for(HWND z:controls)SendMessageW(z,WM_SETFONT,(WPARAM)font,TRUE);
- FillCombo(gSource);FillCombo(gTarget);SelectChoice(gSource,VK_CAPITAL,0);SelectChoice(gTarget,VK_ESCAPE,0);Refresh();
+ FillCombo(gSource,gSourceChoices);FillCombo(gTarget,gTargetChoices);
+ SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
+ SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
+ Refresh();
 }
 static void AddMap() {
  Mapping m;
- m.source=ComboCode(gSource); m.target=ComboCode(gTarget);
+ m.source=ComboCode(gSource,gSourceChoices); m.target=ComboCode(gTarget,gTargetChoices);
  m.block=Button_GetCheck(gBlock)==BST_CHECKED;
- m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin) | ComboImpliedMods(gSource);
- m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget);
+ m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin) | ComboImpliedMods(gSource,gSourceChoices);
+ m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget,gTargetChoices);
  if(!m.source||(!m.block&&!m.target))return;
  for(auto&x:gMaps)if(x.source==m.source && x.srcMods==m.srcMods){x=m;Save();Refresh();return;}
  gMaps.push_back(m);Save();Refresh();
@@ -422,9 +432,13 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    unsigned mods=(unsigned)((ULONG_PTR)l>>1);
    if(gSelfTestMode) { gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0; }
    if(code==VK_ESCAPE){Refresh();return 0;}
-   SelectChoice(src?gSource:gTarget,code,mods&KRM_SHIFT);
-   if(src) SetModChecks(mods & ~ComboImpliedMods(gSource),gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
-   else SetModChecks(mods & ~ComboImpliedMods(gTarget),gDstShift,gDstCtrl,gDstAlt,gDstWin);
+   if(src) {
+    SelectChoice(gSource,gSourceChoices,code,mods&KRM_SHIFT);
+    SetModChecks(mods & ~ComboImpliedMods(gSource,gSourceChoices),gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+   } else {
+    SelectChoice(gTarget,gTargetChoices,code,mods&KRM_SHIFT);
+    SetModChecks(mods & ~ComboImpliedMods(gTarget,gTargetChoices),gDstShift,gDstCtrl,gDstAlt,gDstWin);
+   }
    Refresh();return 0;}
   case WM_CLOSE:DestroyWindow(h);return 0;
   case WM_DESTROY:Save();Unhook();PostQuitMessage(0);return 0;
