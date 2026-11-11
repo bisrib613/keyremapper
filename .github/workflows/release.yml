@@ -1,0 +1,43 @@
+name: Build and release Windows installer
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish application
+        shell: pwsh
+        run: dotnet publish KeyRemapper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+      - name: Install Inno Setup if missing
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+          }
+      - name: Build installer
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\KeyRemapper.iss"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KeyRemapper-Setup
+          path: dist/KeyRemapper_Setup.exe
+          if-no-files-found: error
+      - name: Publish installer release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view v1.0.0 *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create v1.0.0 "dist/KeyRemapper_Setup.exe" --title "Key Remapper v1.0.0" --notes "Windows installer (Inno Setup). Non-portable. Unsigned beta build; keyboard hook behavior requires hardware validation."
+          } else {
+            gh release upload v1.0.0 "dist/KeyRemapper_Setup.exe" --clobber
+          }
