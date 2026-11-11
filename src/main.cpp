@@ -710,16 +710,134 @@ static void RemoveMap() {
 }
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  switch(m) {
-  case WM_CREATE:CreateUi(h);InstallHooks();Refresh();return 0;
-  case WM_COMMAND:
-   switch(LOWORD(w)) {
-    case ID_CAP_SRC:gCaptureSource=true;gCaptureTarget=false;SetWindowTextW(gStatus,L"Press source key/mouse button/wheel...");break;
-    case ID_CAP_DST:gCaptureTarget=true;gCaptureSource=false;SetWindowTextW(gStatus,L"Press target key/mouse button/wheel...");break;
-    case ID_ADD:AddMap();break;case ID_REMOVE:RemoveMap();break;
-    case ID_PAUSE:gPaused=!gPaused;Refresh();break;
-    case ID_BLOCK:{BOOL e=Button_GetCheck(gBlock)!=BST_CHECKED;EnableWindow(gTarget,e);break;}
-   }return 0;
-  case WM_KR_CAPTURE:{
+  case WM_CREATE:
+   CreateUi(h);
+   InstallHooks();
+   Refresh();
+   return 0;
+
+  case WM_SIZE:
+   LayoutUi(LOWORD(l),HIWORD(l));
+   return 0;
+
+  case WM_GETMINMAXINFO: {
+   auto* info=reinterpret_cast<MINMAXINFO*>(l);
+   info->ptMinTrackSize.x=800;
+   info->ptMinTrackSize.y=620;
+   return 0;
+  }
+
+  case WM_MEASUREITEM: {
+   auto* mi=reinterpret_cast<MEASUREITEMSTRUCT*>(l);
+   if(mi->CtlID==ID_SOURCE || mi->CtlID==ID_TARGET) {
+    mi->itemHeight=32;
+    return TRUE;
+   }
+   break;
+  }
+
+  case WM_DRAWITEM: {
+   auto* di=reinterpret_cast<DRAWITEMSTRUCT*>(l);
+   if(di->CtlType==ODT_BUTTON) { DrawOwnerButton(di); return TRUE; }
+   if(di->CtlType==ODT_COMBOBOX) { DrawOwnerCombo(di); return TRUE; }
+   break;
+  }
+
+  case WM_CTLCOLORSTATIC: {
+   HDC dc=(HDC)w; HWND control=(HWND)l;
+   int id=GetDlgCtrlID(control);
+   SetBkMode(dc,TRANSPARENT);
+   SetTextColor(dc,id==ID_TITLE?C_TEXT:C_MUTED);
+   return (LRESULT)gBrushBg;
+  }
+
+  case WM_CTLCOLORBTN: {
+   HDC dc=(HDC)w;
+   SetBkMode(dc,TRANSPARENT);
+   SetTextColor(dc,C_TEXT);
+   SetBkColor(dc,C_BG);
+   return (LRESULT)gBrushBg;
+  }
+
+  case WM_CTLCOLORLISTBOX: {
+   HDC dc=(HDC)w;
+   SetBkColor(dc,C_CONTROL);
+   SetTextColor(dc,C_TEXT);
+   return (LRESULT)gBrushControl;
+  }
+
+  case WM_NOTIFY: {
+   auto* hdr=reinterpret_cast<NMHDR*>(l);
+   if(hdr->hwndFrom==gList) {
+    if(hdr->code==NM_DBLCLK) {
+     ModifySelected();
+     return 0;
+    }
+    if(hdr->code==NM_CUSTOMDRAW) {
+     auto* cd=reinterpret_cast<LPNMLVCUSTOMDRAW>(l);
+     if(cd->nmcd.dwDrawStage==CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
+     if(cd->nmcd.dwDrawStage==CDDS_ITEMPREPAINT) {
+      bool selected=(ListView_GetItemState(gList,(int)cd->nmcd.dwItemSpec,LVIS_SELECTED)&LVIS_SELECTED)!=0;
+      cd->clrText=C_TEXT;
+      cd->clrTextBk=selected?C_HOVER:C_SURFACE;
+      if(gFontBody) SelectObject(cd->nmcd.hdc,gFontBody);
+      return CDRF_NEWFONT;
+     }
+    }
+   }
+   break;
+  }
+
+  case WM_COMMAND: {
+   int id=LOWORD(w);
+   int notification=HIWORD(w);
+   switch(id) {
+    case ID_CAP_SRC:
+     gCaptureSource=true;gCaptureTarget=false;
+     SetWindowTextW(gStatus,L"Press the source key, mouse button, or wheel action");
+     break;
+    case ID_CAP_DST:
+     gCaptureTarget=true;gCaptureSource=false;
+     SetWindowTextW(gStatus,L"Press the target key, mouse button, or wheel action");
+     break;
+    case ID_ADD:
+     AddMap();
+     break;
+    case ID_MODIFY:
+     ModifySelected();
+     break;
+    case ID_REMOVE:
+     RemoveMap();
+     break;
+    case ID_PAUSE:
+     gPaused=!gPaused;
+     Refresh();
+     break;
+    case ID_BLOCK: {
+     BOOL enabled=Button_GetCheck(gBlock)!=BST_CHECKED;
+     EnableWindow(gTarget,enabled);
+     EnableWindow(gDstShift,enabled);
+     EnableWindow(gDstCtrl,enabled);
+     EnableWindow(gDstAlt,enabled);
+     EnableWindow(gDstWin,enabled);
+     break;
+    }
+    case ID_STARTUP:
+     if(notification==BN_CLICKED) {
+      bool enabled=Button_GetCheck(gStartup)==BST_CHECKED;
+      if(!SetStartupEnabled(enabled)) {
+       Button_SetCheck(gStartup,enabled?BST_UNCHECKED:BST_CHECKED);
+       SetWindowTextW(gStatus,L"Could not update the Windows startup setting");
+      } else {
+       SetWindowTextW(gStatus,enabled?L"Key Remapper will start with Windows":L"Start with Windows disabled");
+      }
+     }
+     break;
+   }
+   return 0;
+  }
+
+  case WM_KR_CAPTURE: {
    int code=(int)w;
    bool src=(l&1)==0;
    unsigned mods=(unsigned)((ULONG_PTR)l>>1);
@@ -732,9 +850,28 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
     SelectChoice(gTarget,gTargetChoices,code,mods&KRM_SHIFT);
     SetModChecks(mods & ~ComboImpliedMods(gTarget,gTargetChoices),gDstShift,gDstCtrl,gDstAlt,gDstWin);
    }
-   Refresh();return 0;}
-  case WM_CLOSE:DestroyWindow(h);return 0;
-  case WM_DESTROY:Save();Unhook();PostQuitMessage(0);return 0;
+   SetWindowTextW(gStatus,src?L"Source captured":L"Target captured");
+   return 0;
+  }
+
+  case WM_CLOSE:
+   DestroyWindow(h);
+   return 0;
+
+  case WM_DESTROY:
+   Save();
+   Unhook();
+   if(gFontBody) DeleteObject(gFontBody);
+   if(gFontSmall) DeleteObject(gFontSmall);
+   if(gFontTitle) DeleteObject(gFontTitle);
+   if(gFontLabel) DeleteObject(gFontLabel);
+   if(gBrushBg) DeleteObject(gBrushBg);
+   if(gBrushSurface) DeleteObject(gBrushSurface);
+   if(gBrushControl) DeleteObject(gBrushControl);
+   gFontBody=gFontSmall=gFontTitle=gFontLabel=nullptr;
+   gBrushBg=gBrushSurface=gBrushControl=nullptr;
+   PostQuitMessage(0);
+   return 0;
  }
  return DefWindowProcW(h,m,w,l);
 }
@@ -822,8 +959,8 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
  INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);SetProcessDPIAware();Load();
  WNDCLASSEXW wc{sizeof(wc)};wc.hInstance=hi;wc.lpfnWndProc=WndProc;wc.lpszClassName=L"KRNative";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
- wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassExW(&wc);
- gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper - Native Rebuild",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,
-  CW_USEDEFAULT,CW_USEDEFAULT,715,525,nullptr,nullptr,hi,nullptr);if(!gWnd)return 2;
+ wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);wc.hbrBackground=CreateSolidBrush(C_BG);RegisterClassExW(&wc);
+ gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
+  CW_USEDEFAULT,CW_USEDEFAULT,840,660,nullptr,nullptr,hi,nullptr);if(!gWnd)return 2;
  ShowWindow(gWnd,show);UpdateWindow(gWnd);MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}return (int)msg.wParam;
 }
