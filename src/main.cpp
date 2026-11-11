@@ -437,6 +437,46 @@ static void SetModChecks(unsigned m,HWND sh,HWND ctrl,HWND alt,HWND win) {
  Button_SetCheck(alt,(m&KRM_ALT)?BST_CHECKED:BST_UNCHECKED);
  Button_SetCheck(win,(m&KRM_WIN)?BST_CHECKED:BST_UNCHECKED);
 }
+static unsigned PreferredImpliedMods(int code,unsigned mods) {
+ return ((mods&KRM_SHIFT) && ShiftSymbol(code)) ? KRM_SHIFT : 0;
+}
+static int SelectedMappingIndex() {
+ int row=ListView_GetNextItem(gList,-1,LVNI_SELECTED);
+ if(row<0) return -1;
+ LVITEMW item{}; item.mask=LVIF_PARAM; item.iItem=row;
+ if(!ListView_GetItem(gList,&item)) return -1;
+ Mapping* ptr=reinterpret_cast<Mapping*>(item.lParam);
+ if(!ptr) return -1;
+ for(size_t i=0;i<gMaps.size();++i) if(&gMaps[i]==ptr) return (int)i;
+ return -1;
+}
+static void ResetEditorState() {
+ gEditingIndex=-1;
+ if(gAdd) SetWindowTextW(gAdd,L"Add mapping");
+}
+static void LoadMappingIntoEditor(int index) {
+ if(index<0 || index>=(int)gMaps.size()) return;
+ const Mapping& m=gMaps[(size_t)index];
+ unsigned srcImplicit=PreferredImpliedMods(m.source,m.srcMods);
+ unsigned dstImplicit=PreferredImpliedMods(m.target,m.dstMods);
+ SelectChoice(gSource,gSourceChoices,m.source,srcImplicit);
+ SelectChoice(gTarget,gTargetChoices,m.target,dstImplicit);
+ SetModChecks(m.srcMods&~srcImplicit,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ SetModChecks(m.dstMods&~dstImplicit,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ Button_SetCheck(gBlock,m.block?BST_CHECKED:BST_UNCHECKED);
+ EnableWindow(gTarget,!m.block);
+ gEditingIndex=index;
+ if(gAdd) SetWindowTextW(gAdd,L"Save changes");
+ if(gStatus) SetWindowTextW(gStatus,L"Editing selected mapping");
+}
+static void ModifySelected() {
+ int index=SelectedMappingIndex();
+ if(index<0) {
+  if(gStatus) SetWindowTextW(gStatus,L"Select a mapping to modify");
+  return;
+ }
+ LoadMappingIntoEditor(index);
+}
 static void Refresh() {
  ListView_DeleteAllItems(gList);int row=0;
  for(auto&m:gMaps) {
@@ -491,15 +531,42 @@ static void AddMap() {
  m.block=Button_GetCheck(gBlock)==BST_CHECKED;
  m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin) | ComboImpliedMods(gSource,gSourceChoices);
  m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget,gTargetChoices);
- if(!m.source||(!m.block&&!m.target))return;
- for(auto&x:gMaps)if(x.source==m.source && x.srcMods==m.srcMods){x=m;Save();Refresh();return;}
- gMaps.push_back(m);Save();Refresh();
+ if(!m.source||(!m.block&&!m.target)) return;
+
+ for(size_t i=0;i<gMaps.size();++i) {
+  if((int)i==gEditingIndex) continue;
+  if(gMaps[i].source==m.source && gMaps[i].srcMods==m.srcMods) {
+   if(gStatus) SetWindowTextW(gStatus,L"A mapping with this source already exists. Select it and use Modify.");
+   return;
+  }
+ }
+
+ int selectIndex=-1;
+ if(gEditingIndex>=0 && gEditingIndex<(int)gMaps.size()) {
+  gMaps[(size_t)gEditingIndex]=m;
+  selectIndex=gEditingIndex;
+ } else {
+  gMaps.push_back(m);
+  selectIndex=(int)gMaps.size()-1;
+ }
+ Save();
+ ResetEditorState();
+ Refresh();
+ if(selectIndex>=0 && selectIndex<ListView_GetItemCount(gList)) {
+  ListView_SetItemState(gList,selectIndex,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+  ListView_EnsureVisible(gList,selectIndex,FALSE);
+ }
 }
 static void RemoveMap() {
- int r=ListView_GetNextItem(gList,-1,LVNI_SELECTED);if(r<0)return;
- LVITEMW it{};it.mask=LVIF_PARAM;it.iItem=r;if(!ListView_GetItem(gList,&it))return;
- Mapping*p=(Mapping*)it.lParam;auto x=std::find_if(gMaps.begin(),gMaps.end(),[&](Mapping&m){return &m==p;});
- if(x!=gMaps.end())gMaps.erase(x);Save();Refresh();
+ int index=SelectedMappingIndex();
+ if(index<0) {
+  if(gStatus) SetWindowTextW(gStatus,L"Select a mapping to remove");
+  return;
+ }
+ gMaps.erase(gMaps.begin()+index);
+ ResetEditorState();
+ Save();
+ Refresh();
 }
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  switch(m) {
