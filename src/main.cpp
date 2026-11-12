@@ -671,24 +671,25 @@ static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
 
 static void LayoutUi(int width,int height) {
  if(!gList) return;
- const int margin=24;
- const int listTop=366;
- const int footerY=height-52;
- const int listBottom=std::max(listTop+150,footerY-18);
- const int listWidth=std::max(620,width-margin*2);
+ const int margin=20;
+ const int cardLeft=20;
+ const int listTop=336;
+ const int footerY=height-44;
+ const int listBottom=std::max(listTop+118,footerY-16);
+ const int listWidth=std::max(610,width-margin*2);
  const int half=listWidth/2;
 
- if(gListSource) MoveWindow(gListSource,margin+14,338,half-20,22,TRUE);
- if(gListTarget) MoveWindow(gListTarget,margin+half+8,338,half-20,22,TRUE);
- MoveWindow(gList,margin,listTop,listWidth,listBottom-listTop,TRUE);
+ if(gListSource) MoveWindow(gListSource,cardLeft+12,310,half-18,20,TRUE);
+ if(gListTarget) MoveWindow(gListTarget,cardLeft+half+6,310,half-18,20,TRUE);
+ MoveWindow(gList,cardLeft,listTop,listWidth,listBottom-listTop,TRUE);
 
  if(gEmpty) {
-  int emptyW=std::min(420,listWidth-48);
-  MoveWindow(gEmpty,margin+(listWidth-emptyW)/2,listTop+52,emptyW,34,TRUE);
+  int emptyW=std::min(380,listWidth-40);
+  MoveWindow(gEmpty,cardLeft+(listWidth-emptyW)/2,listTop+38,emptyW,28,TRUE);
  }
- if(gStartup) MoveWindow(gStartup,margin,footerY,162,30,TRUE);
- if(gStatus) MoveWindow(gStatus,204,footerY+5,std::max(220,width-204-146),22,TRUE);
- if(gPause) MoveWindow(gPause,width-124,footerY-2,100,34,TRUE);
+ if(gStartup) MoveWindow(gStartup,margin,footerY,156,28,TRUE);
+ if(gStatus) MoveWindow(gStatus,198,footerY+4,std::max(210,width-198-120),20,TRUE);
+ if(gPause) MoveWindow(gPause,width-106,footerY-2,86,32,TRUE);
 
  ListView_SetColumnWidth(gList,0,half);
  ListView_SetColumnWidth(gList,1,listWidth-half);
@@ -696,57 +697,57 @@ static void LayoutUi(int width,int height) {
 
 static void CreateUi(HWND h) {
  EnsureUiResources(h);
- BOOL dark=TRUE;
+ BOOL dark=FALSE;
  DwmSetWindowAttribute(h,20,&dark,sizeof(dark));
 
- gIconControl=Make(h,L"STATIC",L"",SS_ICON|SS_REALSIZECONTROL,24,20,36,36,0);
- if(gIconLarge) SendMessageW(gIconControl,STM_SETICON,(WPARAM)gIconLarge,0);
+ gIconControl=Make(h,L"STATIC",L"",SS_ICON|SS_REALSIZECONTROL,20,16,28,28,0);
+ if(gIconSmall) SendMessageW(gIconControl,STM_SETICON,(WPARAM)gIconSmall,0);
 
- gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,76,18,460,34,ID_TITLE);
- gSubtitle=Make(h,L"STATIC",L"Remap keyboard and mouse input with precise modifier control.",SS_LEFT,76,52,650,22,ID_SUBTITLE);
- gSection=Make(h,L"STATIC",L"Create mapping",SS_LEFT,24,96,180,24,ID_SECTION);
+ gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,58,14,300,28,ID_TITLE);
+ gSubtitle=Make(h,L"STATIC",L"Remap keyboard and mouse input.",SS_LEFT,58,40,420,20,ID_SUBTITLE);
 
- Make(h,L"STATIC",L"Source",SS_LEFT,24,142,68,22,0);
- gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,104,132,286,360,ID_SOURCE);
- HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,402,132,94,36,ID_CAP_SRC);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,520,142,70,22,0);
- DWORD toggleStyle=BS_AUTOCHECKBOX|BS_PUSHLIKE;
- gSrcShift=Make(h,L"BUTTON",L"Shift",toggleStyle,592,134,60,32,ID_SRC_SHIFT);
- gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",toggleStyle,658,134,54,32,ID_SRC_CTRL);
- gSrcAlt=Make(h,L"BUTTON",L"Alt",toggleStyle,718,134,52,32,ID_SRC_ALT);
- gSrcWin=Make(h,L"BUTTON",L"Win",toggleStyle,776,134,54,32,ID_SRC_WIN);
+ gSection=Make(h,L"STATIC",L"Create mapping",SS_LEFT,32,82,180,22,ID_SECTION);
 
- Make(h,L"STATIC",L"Target",SS_LEFT,24,194,68,22,0);
- gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,104,184,286,360,ID_TARGET);
- HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,402,184,94,36,ID_CAP_DST);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,520,194,70,22,0);
- gDstShift=Make(h,L"BUTTON",L"Shift",toggleStyle,592,186,60,32,ID_DST_SHIFT);
- gDstCtrl=Make(h,L"BUTTON",L"Ctrl",toggleStyle,658,186,54,32,ID_DST_CTRL);
- gDstAlt=Make(h,L"BUTTON",L"Alt",toggleStyle,718,186,52,32,ID_DST_ALT);
- gDstWin=Make(h,L"BUTTON",L"Win",toggleStyle,776,186,54,32,ID_DST_WIN);
+ Make(h,L"STATIC",L"Source",SS_LEFT,32,122,56,20,0);
+ gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,112,210,320,ID_SOURCE);
+ HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,112,80,32,ID_CAP_SRC);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,122,62,20,0);
+ gSrcShift=Make(h,L"BUTTON",L"Shift",BS_OWNERDRAW,482,114,52,28,ID_SRC_SHIFT);
+ gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_OWNERDRAW,540,114,48,28,ID_SRC_CTRL);
+ gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_OWNERDRAW,594,114,46,28,ID_SRC_ALT);
+ gSrcWin=Make(h,L"BUTTON",L"Win",BS_OWNERDRAW,646,114,48,28,ID_SRC_WIN);
 
- gAdd=Make(h,L"BUTTON",L"Add mapping",BS_OWNERDRAW,24,244,124,38,ID_ADD);
- gModify=Make(h,L"BUTTON",L"Modify selected",BS_OWNERDRAW,160,244,142,38,ID_MODIFY);
- gRemove=Make(h,L"BUTTON",L"Remove selected",BS_OWNERDRAW,314,244,142,38,ID_REMOVE);
- gBlock=Make(h,L"BUTTON",L"Block source",toggleStyle,486,247,126,32,ID_BLOCK);
+ Make(h,L"STATIC",L"Target",SS_LEFT,32,164,56,20,0);
+ gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,154,210,320,ID_TARGET);
+ HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,154,80,32,ID_CAP_DST);
+ Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,164,62,20,0);
+ gDstShift=Make(h,L"BUTTON",L"Shift",BS_OWNERDRAW,482,156,52,28,ID_DST_SHIFT);
+ gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_OWNERDRAW,540,156,48,28,ID_DST_CTRL);
+ gDstAlt=Make(h,L"BUTTON",L"Alt",BS_OWNERDRAW,594,156,46,28,ID_DST_ALT);
+ gDstWin=Make(h,L"BUTTON",L"Win",BS_OWNERDRAW,646,156,48,28,ID_DST_WIN);
 
- Make(h,L"STATIC",L"Mappings",SS_LEFT,24,308,120,24,0);
- gListSource=Make(h,L"STATIC",L"Source",SS_LEFT,38,338,220,22,ID_LIST_SOURCE);
- gListTarget=Make(h,L"STATIC",L"Target",SS_LEFT,438,338,220,22,ID_LIST_TARGET);
+ gAdd=Make(h,L"BUTTON",L"Add mapping",BS_OWNERDRAW,32,204,108,34,ID_ADD);
+ gModify=Make(h,L"BUTTON",L"Modify",BS_OWNERDRAW,150,204,88,34,ID_MODIFY);
+ gRemove=Make(h,L"BUTTON",L"Remove",BS_OWNERDRAW,248,204,88,34,ID_REMOVE);
+ gBlock=Make(h,L"BUTTON",L"Block source",BS_OWNERDRAW,366,207,122,28,ID_BLOCK);
 
- gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOCOLUMNHEADER,24,366,812,250,ID_LIST,0);
+ Make(h,L"STATIC",L"Mappings",SS_LEFT,32,276,100,22,0);
+ gListSource=Make(h,L"STATIC",L"Source",SS_LEFT,32,310,220,20,ID_LIST_SOURCE);
+ gListTarget=Make(h,L"STATIC",L"Target",SS_LEFT,430,310,220,20,ID_LIST_TARGET);
+
+ gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOCOLUMNHEADER,20,336,780,160,ID_LIST,WS_EX_CLIENTEDGE);
  ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
  ListView_SetBkColor(gList,C_SURFACE);
  ListView_SetTextBkColor(gList,C_SURFACE);
  ListView_SetTextColor(gList,C_TEXT);
  LVCOLUMNW col{};col.mask=LVCF_TEXT|LVCF_WIDTH;
- col.pszText=(LPWSTR)L"Source";col.cx=400;ListView_InsertColumn(gList,0,&col);
- col.pszText=(LPWSTR)L"Target";col.cx=400;ListView_InsertColumn(gList,1,&col);
+ col.pszText=(LPWSTR)L"Source";col.cx=390;ListView_InsertColumn(gList,0,&col);
+ col.pszText=(LPWSTR)L"Target";col.cx=390;ListView_InsertColumn(gList,1,&col);
 
- gEmpty=Make(h,L"STATIC",L"No mappings yet. Add your first mapping above.",SS_CENTER,210,420,480,34,ID_EMPTY);
- gStartup=Make(h,L"BUTTON",L"Start with Windows",toggleStyle,24,628,162,30,ID_STARTUP);
- gStatus=Make(h,L"STATIC",L"",SS_LEFT,204,633,500,22,ID_STATUS);
- gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,796,626,100,34,ID_PAUSE);
+ gEmpty=Make(h,L"STATIC",L"No mappings yet. Add one above.",SS_CENTER,210,382,380,28,ID_EMPTY);
+ gStartup=Make(h,L"BUTTON",L"Start with Windows",BS_OWNERDRAW,20,524,156,28,ID_STARTUP);
+ gStatus=Make(h,L"STATIC",L"",SS_LEFT,198,528,420,20,ID_STATUS);
+ gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,714,522,86,32,ID_PAUSE);
 
  ApplyFont(gTitle,gFontTitle);
  ApplyFont(gSubtitle,gFontSmall);
@@ -761,12 +762,9 @@ static void CreateUi(HWND h) {
  for(HWND z:controls) ApplyFont(z,gFontBody);
  ApplyFont(gList,gFontBody);
 
- for(HWND z:{gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin,gBlock,gStartup}) {
-  SetWindowTheme(z,L"DarkMode_Explorer",nullptr);
- }
- SetWindowTheme(gSource,L"DarkMode_CFD",nullptr);
- SetWindowTheme(gTarget,L"DarkMode_CFD",nullptr);
- SetWindowTheme(gList,L"DarkMode_Explorer",nullptr);
+ SetWindowTheme(gSource,L"Explorer",nullptr);
+ SetWindowTheme(gTarget,L"Explorer",nullptr);
+ SetWindowTheme(gList,L"Explorer",nullptr);
 
  FillCombo(gSource,gSourceChoices);FillCombo(gTarget,gTargetChoices);
  SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
