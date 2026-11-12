@@ -309,10 +309,16 @@ static void Unhook() {
  if(gKeyboard)UnhookWindowsHookEx(gKeyboard);if(gMouse)UnhookWindowsHookEx(gMouse);
  gKeyboard=gMouse=nullptr;
 }
-static std::wstring ConfigPath() {
- wchar_t p[MAX_PATH];SHGetFolderPathW(nullptr,CSIDL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,p);
- std::wstring d=std::wstring(p)+L"\\KeyRemapperClean";CreateDirectoryW(d.c_str(),nullptr);return d+L"\\mappings.txt";
+static std::wstring ConfigDir() {
+ wchar_t p[MAX_PATH]{};
+ SHGetFolderPathW(nullptr,CSIDL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,p);
+ std::wstring d=std::wstring(p)+L"\\KeyRemapperClean";
+ CreateDirectoryW(d.c_str(),nullptr);
+ return d;
 }
+static std::wstring ConfigPath() { return ConfigDir()+L"\\mappings.txt"; }
+static std::wstring ConfigBackupPath() { return ConfigDir()+L"\\mappings.bak"; }
+static std::wstring ConfigTempPath() { return ConfigDir()+L"\\mappings.tmp"; }
 static const wchar_t* STARTUP_RUN_KEY=L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 static const wchar_t* STARTUP_VALUE=L"KeyRemapper";
 
@@ -378,14 +384,9 @@ static void InstallStableComboWheel(HWND combo,ComboWheelState& state) {
  if(GetComboBoxInfo(combo,&info) && info.hwndList)
   SetWindowSubclass(info.hwndList,ComboWheelProc,2,reinterpret_cast<DWORD_PTR>(&state));
 }
-static void Save() {
- std::wofstream f(ConfigPath(),std::ios::trunc);
- if(!f)return;
- for(auto&m:gMaps) f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L' '<<m.srcMods<<L' '<<m.dstMods<<L'\n';
-}
-static void Load() {
- std::wifstream f(ConfigPath());
- if(!f)return;
+static bool ParseMappingsFile(const std::wstring& path,std::vector<Mapping>& out) {
+ std::wifstream f(path);
+ if(!f)return false;
  std::wstring line;
  while(std::getline(f,line)) {
   if(line.empty())continue;
@@ -393,7 +394,40 @@ static void Load() {
   int src=0,dst=0,block=0; unsigned sm=0,dm=0;
   if(!(in>>src>>dst>>block))continue;
   in>>sm>>dm;
-  gMaps.push_back({src,dst,block!=0,sm,dm});
+  out.push_back({src,dst,block!=0,sm,dm});
+ }
+ return true;
+}
+static void Save() {
+ const std::wstring path=ConfigPath();
+ const std::wstring temp=ConfigTempPath();
+ const std::wstring backup=ConfigBackupPath();
+
+ {
+  std::wofstream f(temp,std::ios::trunc);
+  if(!f)return;
+  for(auto&m:gMaps) f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L' '<<m.srcMods<<L' '<<m.dstMods<<L'\n';
+  f.flush();
+  if(!f)return;
+ }
+
+ if(GetFileAttributesW(path.c_str())!=INVALID_FILE_ATTRIBUTES)
+  CopyFileW(path.c_str(),backup.c_str(),FALSE);
+
+ if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+  DeleteFileW(temp.c_str());
+}
+static void Load() {
+ gMaps.clear();
+ const std::wstring primary=ConfigPath();
+ const std::wstring backup=ConfigBackupPath();
+
+ if(ParseMappingsFile(primary,gMaps)) return;
+
+ std::vector<Mapping> recovered;
+ if(ParseMappingsFile(backup,recovered)) {
+  gMaps=std::move(recovered);
+  CopyFileW(backup.c_str(),primary.c_str(),FALSE);
  }
 }
 static Choice SelectedChoice(HWND h,const std::vector<Choice>& choices) {
