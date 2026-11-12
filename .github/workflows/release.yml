@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: keyremapper-v14-${{ github.ref }}
+  group: keyremapper-v152-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
