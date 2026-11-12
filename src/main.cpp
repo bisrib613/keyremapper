@@ -790,21 +790,22 @@ static void AddMap() {
  m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget,gTargetChoices);
  if(!m.source||(!m.block&&!m.target)) return;
 
- for(size_t i=0;i<gMaps.size();++i) {
-  if((int)i==gEditingIndex) continue;
-  if(gMaps[i].source==m.source && gMaps[i].srcMods==m.srcMods) {
-   if(gStatus) SetWindowTextW(gStatus,L"A mapping with this source already exists. Select it and use Modify.");
-   return;
-  }
- }
-
  int selectIndex=-1;
  if(gEditingIndex>=0 && gEditingIndex<(int)gMaps.size()) {
   gMaps[(size_t)gEditingIndex]=m;
   selectIndex=gEditingIndex;
  } else {
-  gMaps.push_back(m);
-  selectIndex=(int)gMaps.size()-1;
+  for(size_t i=0;i<gMaps.size();++i) {
+   if(gMaps[i].source==m.source && gMaps[i].srcMods==m.srcMods) {
+    gMaps[i]=m;
+    selectIndex=(int)i;
+    break;
+   }
+  }
+  if(selectIndex<0) {
+   gMaps.push_back(m);
+   selectIndex=(int)gMaps.size()-1;
+  }
  }
  Save();
  ResetEditorState();
