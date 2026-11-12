@@ -537,53 +537,131 @@ static void ApplyFont(HWND h,HFONT font) {
  if(h && font) SendMessageW(h,WM_SETFONT,(WPARAM)font,TRUE);
 }
 
-static void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
- RECT r=d->rcItem;
- bool primary=d->CtlID==ID_ADD;
- bool pressed=(d->itemState&ODS_SELECTED)!=0;
- bool hot=(d->itemState&ODS_HOTLIGHT)!=0;
- bool disabled=(d->itemState&ODS_DISABLED)!=0;
- COLORREF fill=primary?C_TEXT:C_CONTROL;
- COLORREF text=primary?C_BG:C_TEXT;
- if(hot && !pressed) fill=primary?RGB(230,230,230):C_HOVER;
- if(pressed) fill=primary?C_MUTED:RGB(58,58,58);
- if(disabled) { fill=C_SURFACE; text=C_MUTED; }
+static bool IsModifierId(UINT id) {
+ return id==ID_SRC_SHIFT||id==ID_SRC_CTRL||id==ID_SRC_ALT||id==ID_SRC_WIN||
+        id==ID_DST_SHIFT||id==ID_DST_CTRL||id==ID_DST_ALT||id==ID_DST_WIN;
+}
 
+static bool IsSwitchId(UINT id) {
+ return id==ID_BLOCK || id==ID_STARTUP;
+}
+
+static void DrawRoundedRect(HDC dc,const RECT& r,COLORREF fill,COLORREF border,int radius) {
  HBRUSH brush=CreateSolidBrush(fill);
- HPEN pen=CreatePen(PS_SOLID,1,primary?fill:C_BORDER);
- HGDIOBJ oldBrush=SelectObject(d->hDC,brush);
- HGDIOBJ oldPen=SelectObject(d->hDC,pen);
- RoundRect(d->hDC,r.left,r.top,r.right,r.bottom,8,8);
- SelectObject(d->hDC,oldBrush);
- SelectObject(d->hDC,oldPen);
- DeleteObject(brush);DeleteObject(pen);
+ HPEN pen=CreatePen(PS_SOLID,1,border);
+ HGDIOBJ oldBrush=SelectObject(dc,brush);
+ HGDIOBJ oldPen=SelectObject(dc,pen);
+ RoundRect(dc,r.left,r.top,r.right,r.bottom,radius,radius);
+ SelectObject(dc,oldBrush);
+ SelectObject(dc,oldPen);
+ DeleteObject(brush);
+ DeleteObject(pen);
+}
 
- wchar_t textBuf[128]{};
- GetWindowTextW(d->hwndItem,textBuf,128);
+static void DrawToggleChip(const DRAWITEMSTRUCT* d) {
+ RECT r=d->rcItem;
+ bool checked=Button_GetCheck(d->hwndItem)==BST_CHECKED;
+ bool pressed=(d->itemState&ODS_SELECTED)!=0;
+ bool disabled=(d->itemState&ODS_DISABLED)!=0;
+
+ COLORREF fill=checked?C_LAVENDER:C_SURFACE;
+ COLORREF border=checked?C_LAVENDER_BORDER:C_BORDER;
+ COLORREF text=disabled?RGB(170,174,182):C_TEXT;
+ if(pressed && !disabled) fill=checked?RGB(229,222,252):C_HOVER;
+
+ DrawRoundedRect(d->hDC,r,fill,border,12);
+
+ wchar_t label[64]{};
+ GetWindowTextW(d->hwndItem,label,64);
  SetBkMode(d->hDC,TRANSPARENT);
  SetTextColor(d->hDC,text);
- HFONT oldFont=(HFONT)SelectObject(d->hDC,gFontLabel?gFontLabel:GetStockObject(DEFAULT_GUI_FONT));
- DrawTextW(d->hDC,textBuf,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
- SelectObject(d->hDC,oldFont);
+ HFONT old=(HFONT)SelectObject(d->hDC,gFontSmall?gFontSmall:GetStockObject(DEFAULT_GUI_FONT));
+ DrawTextW(d->hDC,label,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ SelectObject(d->hDC,old);
 
  if(d->itemState&ODS_FOCUS) {
-  RECT focus=r;InflateRect(&focus,-4,-4);
-  DrawFocusRect(d->hDC,&focus);
+  RECT focus=r;InflateRect(&focus,-3,-3);DrawFocusRect(d->hDC,&focus);
+ }
+}
+
+static void DrawSwitchControl(const DRAWITEMSTRUCT* d) {
+ RECT r=d->rcItem;
+ bool checked=Button_GetCheck(d->hwndItem)==BST_CHECKED;
+ bool disabled=(d->itemState&ODS_DISABLED)!=0;
+ int trackW=34,trackH=18;
+ RECT track{r.left,r.top+(r.bottom-r.top-trackH)/2,r.left+trackW,r.top+(r.bottom-r.top+trackH)/2};
+ COLORREF trackFill=checked?C_ACCENT:RGB(207,211,219);
+ if(disabled) trackFill=RGB(225,227,232);
+ DrawRoundedRect(d->hDC,track,trackFill,trackFill,trackH);
+
+ int knob=14;
+ int knobX=checked?track.right-knob-2:track.left+2;
+ RECT k{knobX,track.top+2,knobX+knob,track.top+2+knob};
+ HBRUSH kb=CreateSolidBrush(RGB(255,255,255));
+ HPEN kp=CreatePen(PS_SOLID,1,RGB(255,255,255));
+ HGDIOBJ ob=SelectObject(d->hDC,kb),op=SelectObject(d->hDC,kp);
+ Ellipse(d->hDC,k.left,k.top,k.right,k.bottom);
+ SelectObject(d->hDC,ob);SelectObject(d->hDC,op);DeleteObject(kb);DeleteObject(kp);
+
+ wchar_t label[96]{};
+ GetWindowTextW(d->hwndItem,label,96);
+ RECT tr=r;tr.left=track.right+10;
+ SetBkMode(d->hDC,TRANSPARENT);
+ SetTextColor(d->hDC,disabled?RGB(160,165,174):C_TEXT);
+ HFONT old=(HFONT)SelectObject(d->hDC,gFontSmall?gFontSmall:GetStockObject(DEFAULT_GUI_FONT));
+ DrawTextW(d->hDC,label,-1,&tr,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+ SelectObject(d->hDC,old);
+}
+
+static void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
+ if(IsModifierId(d->CtlID)) { DrawToggleChip(d); return; }
+ if(IsSwitchId(d->CtlID)) { DrawSwitchControl(d); return; }
+
+ RECT r=d->rcItem;
+ bool primary=d->CtlID==ID_ADD;
+ bool capture=d->CtlID==ID_CAP_SRC||d->CtlID==ID_CAP_DST;
+ bool pause=d->CtlID==ID_PAUSE;
+ bool pressed=(d->itemState&ODS_SELECTED)!=0;
+ bool disabled=(d->itemState&ODS_DISABLED)!=0;
+
+ COLORREF fill=C_SURFACE,border=C_BORDER,text=C_TEXT;
+ if(primary) { fill=C_ACCENT;border=C_ACCENT;text=RGB(8,42,51); }
+ else if(capture) { fill=C_LAVENDER;border=C_LAVENDER_BORDER;text=C_TEXT; }
+ else if(pause) { fill=RGB(28,30,35);border=RGB(28,30,35);text=RGB(255,255,255); }
+ else { fill=C_CONTROL;border=C_BORDER;text=C_TEXT; }
+
+ if(pressed && !disabled) {
+  if(primary) fill=C_ACCENT_HOVER;
+  else if(capture) fill=RGB(229,222,252);
+  else if(pause) fill=RGB(48,51,58);
+  else fill=C_HOVER;
+ }
+ if(disabled) { fill=RGB(243,244,247);border=C_BORDER;text=RGB(160,165,174); }
+
+ DrawRoundedRect(d->hDC,r,fill,border,8);
+
+ wchar_t label[128]{};
+ GetWindowTextW(d->hwndItem,label,128);
+ SetBkMode(d->hDC,TRANSPARENT);
+ SetTextColor(d->hDC,text);
+ HFONT old=(HFONT)SelectObject(d->hDC,gFontLabel?gFontLabel:GetStockObject(DEFAULT_GUI_FONT));
+ DrawTextW(d->hDC,label,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ SelectObject(d->hDC,old);
+
+ if(d->itemState&ODS_FOCUS) {
+  RECT focus=r;InflateRect(&focus,-4,-4);DrawFocusRect(d->hDC,&focus);
  }
 }
 
 static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
- FillRect(d->hDC,&d->rcItem,gBrushControl);
+ RECT r=d->rcItem;
+ COLORREF fill=(d->itemState&ODS_SELECTED)?C_SELECTED:C_SURFACE;
+ FillRect(d->hDC,&r,CreateSolidBrush(fill));
  if(d->itemID==(UINT)-1) return;
+
  wchar_t buf[128]{};
  SendMessageW(d->hwndItem,CB_GETLBTEXT,d->itemID,(LPARAM)buf);
- RECT r=d->rcItem;
- if(d->itemState&ODS_SELECTED) {
-  HBRUSH selected=CreateSolidBrush(C_HOVER);
-  FillRect(d->hDC,&r,selected);
-  DeleteObject(selected);
- }
- r.left+=12;r.right-=8;
+ r.left+=10;r.right-=8;
  SetBkMode(d->hDC,TRANSPARENT);
  SetTextColor(d->hDC,C_TEXT);
  HFONT old=(HFONT)SelectObject(d->hDC,gFontBody?gFontBody:GetStockObject(DEFAULT_GUI_FONT));
