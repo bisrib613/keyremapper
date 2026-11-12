@@ -1066,6 +1066,22 @@ static int SelfTest() {
                      (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(listTarget,L"@")==0);
  if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
 
+ // Regression for real UI case: an existing source mapping must be replaced by Add mapping.
+ gMaps.clear();
+ gMaps.push_back({VK_OEM_3,'2',false,0,0});
+ Refresh();
+ SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
+ SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
+ SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ Button_SetCheck(gBlock,BST_UNCHECKED);
+ AddMap();
+ wchar_t upsertTarget[64]{};
+ if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,upsertTarget,64);
+ bool upsertOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
+                (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(upsertTarget,L"@")==0);
+ if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 28; }
+
  // Modify regression: select the row, load it, change target to #, then save.
  ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
  ModifySelected();
