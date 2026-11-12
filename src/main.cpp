@@ -87,13 +87,20 @@ static HWND gAdd, gModify, gRemove, gTitle, gSubtitle, gSection, gEmpty, gListSo
 static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
 static int gEditingIndex=-1;
 
-static constexpr COLORREF C_BG=RGB(24,24,24);
-static constexpr COLORREF C_SURFACE=RGB(31,31,31);
-static constexpr COLORREF C_CONTROL=RGB(39,39,39);
-static constexpr COLORREF C_HOVER=RGB(49,49,49);
-static constexpr COLORREF C_TEXT=RGB(255,255,255);
-static constexpr COLORREF C_MUTED=RGB(155,155,155);
-static constexpr COLORREF C_BORDER=RGB(49,49,49);
+static constexpr COLORREF C_BG=RGB(247,247,250);
+static constexpr COLORREF C_SURFACE=RGB(255,255,255);
+static constexpr COLORREF C_CONTROL=RGB(246,247,250);
+static constexpr COLORREF C_HOVER=RGB(236,239,244);
+static constexpr COLORREF C_TEXT=RGB(24,27,32);
+static constexpr COLORREF C_MUTED=RGB(96,103,115);
+static constexpr COLORREF C_BORDER=RGB(221,225,233);
+static constexpr COLORREF C_ACCENT=RGB(79,198,228);
+static constexpr COLORREF C_ACCENT_HOVER=RGB(57,184,217);
+static constexpr COLORREF C_LAVENDER=RGB(239,234,255);
+static constexpr COLORREF C_LAVENDER_BORDER=RGB(216,207,248);
+static constexpr COLORREF C_ACTIVE=RGB(21,164,105);
+static constexpr COLORREF C_ACTIVE_BG=RGB(231,249,241);
+static constexpr COLORREF C_SELECTED=RGB(232,247,252);
 static HBRUSH gBrushBg=nullptr, gBrushSurface=nullptr, gBrushControl=nullptr;
 static HFONT gFontBody=nullptr, gFontSmall=nullptr, gFontTitle=nullptr, gFontLabel=nullptr;
 static HICON gIconLarge=nullptr, gIconSmall=nullptr;
@@ -520,10 +527,10 @@ static void EnsureUiResources(HWND h) {
  if(!gBrushBg) gBrushBg=CreateSolidBrush(C_BG);
  if(!gBrushSurface) gBrushSurface=CreateSolidBrush(C_SURFACE);
  if(!gBrushControl) gBrushControl=CreateSolidBrush(C_CONTROL);
- if(!gFontBody) gFontBody=MakeUiFont(h,15,FW_NORMAL);
- if(!gFontSmall) gFontSmall=MakeUiFont(h,13,FW_NORMAL);
+ if(!gFontBody) gFontBody=MakeUiFont(h,14,FW_NORMAL);
+ if(!gFontSmall) gFontSmall=MakeUiFont(h,12,FW_NORMAL);
  if(!gFontLabel) gFontLabel=MakeUiFont(h,13,FW_SEMIBOLD);
- if(!gFontTitle) gFontTitle=MakeUiFont(h,26,FW_SEMIBOLD);
+ if(!gFontTitle) gFontTitle=MakeUiFont(h,21,FW_SEMIBOLD);
 }
 
 static void ApplyFont(HWND h,HFONT font) {
