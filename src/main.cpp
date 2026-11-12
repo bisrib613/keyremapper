@@ -831,12 +831,13 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
 
   case WM_SIZE:
    LayoutUi(LOWORD(l),HIWORD(l));
+   InvalidateRect(h,nullptr,TRUE);
    return 0;
 
   case WM_GETMINMAXINFO: {
    auto* info=reinterpret_cast<MINMAXINFO*>(l);
-   info->ptMinTrackSize.x=860;
-   info->ptMinTrackSize.y=650;
+   info->ptMinTrackSize.x=760;
+   info->ptMinTrackSize.y=560;
    return 0;
   }
 
@@ -844,12 +845,20 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    PAINTSTRUCT ps{};
    HDC dc=BeginPaint(h,&ps);
    RECT client{};GetClientRect(h,&client);
-   HPEN pen=CreatePen(PS_SOLID,1,C_BORDER);
-   HGDIOBJ oldPen=SelectObject(dc,pen);
-   MoveToEx(dc,24,84,nullptr);LineTo(dc,client.right-24,84);
-   MoveToEx(dc,24,client.bottom-70,nullptr);LineTo(dc,client.right-24,client.bottom-70);
-   SelectObject(dc,oldPen);
-   DeleteObject(pen);
+
+   RECT editor{20,70,client.right-20,252};
+   RECT mappings{20,264,client.right-20,client.bottom-58};
+   DrawRoundedRect(dc,editor,C_SURFACE,C_BORDER,12);
+   DrawRoundedRect(dc,mappings,C_SURFACE,C_BORDER,12);
+
+   int footerY=client.bottom-44;
+   COLORREF statusColor=(!gKeyboard||!gMouse)?RGB(198,67,67):(gPaused?RGB(214,147,35):C_ACTIVE);
+   HBRUSH dotBrush=CreateSolidBrush(statusColor);
+   HGDIOBJ old=SelectObject(dc,dotBrush);
+   Ellipse(dc,184,footerY+8,192,footerY+16);
+   SelectObject(dc,old);
+   DeleteObject(dotBrush);
+
    EndPaint(h,&ps);
    return 0;
   }
@@ -857,7 +866,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_MEASUREITEM: {
    auto* mi=reinterpret_cast<MEASUREITEMSTRUCT*>(l);
    if(mi->CtlID==ID_SOURCE || mi->CtlID==ID_TARGET) {
-    mi->itemHeight=32;
+    mi->itemHeight=28;
     return TRUE;
    }
    break;
@@ -876,26 +885,21 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    SetBkMode(dc,TRANSPARENT);
    if(id==ID_TITLE || id==ID_SECTION) SetTextColor(dc,C_TEXT);
    else SetTextColor(dc,C_MUTED);
-   if(id==ID_EMPTY) {
-    SetBkColor(dc,C_SURFACE);
-    return (LRESULT)gBrushSurface;
-   }
-   return (LRESULT)gBrushBg;
+   return (LRESULT)GetStockObject(HOLLOW_BRUSH);
   }
 
   case WM_CTLCOLORBTN: {
    HDC dc=(HDC)w;
    SetBkMode(dc,TRANSPARENT);
    SetTextColor(dc,C_TEXT);
-   SetBkColor(dc,C_BG);
-   return (LRESULT)gBrushBg;
+   return (LRESULT)GetStockObject(HOLLOW_BRUSH);
   }
 
   case WM_CTLCOLORLISTBOX: {
    HDC dc=(HDC)w;
-   SetBkColor(dc,C_CONTROL);
+   SetBkColor(dc,C_SURFACE);
    SetTextColor(dc,C_TEXT);
-   return (LRESULT)gBrushControl;
+   return (LRESULT)gBrushSurface;
   }
 
   case WM_NOTIFY: {
@@ -911,7 +915,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
      if(cd->nmcd.dwDrawStage==CDDS_ITEMPREPAINT) {
       bool selected=(ListView_GetItemState(gList,(int)cd->nmcd.dwItemSpec,LVIS_SELECTED)&LVIS_SELECTED)!=0;
       cd->clrText=C_TEXT;
-      cd->clrTextBk=selected?C_HOVER:C_SURFACE;
+      cd->clrTextBk=selected?C_SELECTED:C_SURFACE;
       if(gFontBody) SelectObject(cd->nmcd.hdc,gFontBody);
       return CDRF_NEWFONT;
      }
@@ -923,6 +927,14 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_COMMAND: {
    int id=LOWORD(w);
    int notification=HIWORD(w);
+
+   if(IsModifierId(id) && notification==BN_CLICKED) {
+    HWND btn=GetDlgItem(h,id);
+    Button_SetCheck(btn,Button_GetCheck(btn)==BST_CHECKED?BST_UNCHECKED:BST_CHECKED);
+    InvalidateRect(btn,nullptr,TRUE);
+    return 0;
+   }
+
    switch(id) {
     case ID_CAP_SRC:
      gCaptureSource=true;gCaptureTarget=false;
@@ -944,25 +956,32 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
     case ID_PAUSE:
      gPaused=!gPaused;
      Refresh();
+     InvalidateRect(h,nullptr,TRUE);
      break;
-    case ID_BLOCK: {
-     BOOL enabled=Button_GetCheck(gBlock)!=BST_CHECKED;
-     EnableWindow(gTarget,enabled);
-     EnableWindow(gDstShift,enabled);
-     EnableWindow(gDstCtrl,enabled);
-     EnableWindow(gDstAlt,enabled);
-     EnableWindow(gDstWin,enabled);
+    case ID_BLOCK:
+     if(notification==BN_CLICKED) {
+      Button_SetCheck(gBlock,Button_GetCheck(gBlock)==BST_CHECKED?BST_UNCHECKED:BST_CHECKED);
+      BOOL enabled=Button_GetCheck(gBlock)!=BST_CHECKED;
+      EnableWindow(gTarget,enabled);
+      EnableWindow(gDstShift,enabled);
+      EnableWindow(gDstCtrl,enabled);
+      EnableWindow(gDstAlt,enabled);
+      EnableWindow(gDstWin,enabled);
+      InvalidateRect(gBlock,nullptr,TRUE);
+     }
      break;
-    }
     case ID_STARTUP:
      if(notification==BN_CLICKED) {
-      bool enabled=Button_GetCheck(gStartup)==BST_CHECKED;
+      bool oldState=Button_GetCheck(gStartup)==BST_CHECKED;
+      bool enabled=!oldState;
+      Button_SetCheck(gStartup,enabled?BST_CHECKED:BST_UNCHECKED);
       if(!SetStartupEnabled(enabled)) {
-       Button_SetCheck(gStartup,enabled?BST_UNCHECKED:BST_CHECKED);
+       Button_SetCheck(gStartup,oldState?BST_CHECKED:BST_UNCHECKED);
        SetWindowTextW(gStatus,L"Could not update the Windows startup setting");
       } else {
-       SetWindowTextW(gStatus,enabled?L"Key Remapper will start with Windows":L"Start with Windows disabled");
+       SetWindowTextW(gStatus,enabled?L"Starts with Windows":L"Start with Windows disabled");
       }
+      InvalidateRect(gStartup,nullptr,TRUE);
      }
      break;
    }
@@ -983,6 +1002,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
     SetModChecks(mods & ~ComboImpliedMods(gTarget,gTargetChoices),gDstShift,gDstCtrl,gDstAlt,gDstWin);
    }
    SetWindowTextW(gStatus,src?L"Source captured":L"Target captured");
+   InvalidateRect(h,nullptr,FALSE);
    return 0;
   }
 
@@ -1142,7 +1162,7 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  RegisterClassExW(&wc);
 
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
-  CW_USEDEFAULT,CW_USEDEFAULT,920,700,nullptr,nullptr,hi,nullptr);
+  CW_USEDEFAULT,CW_USEDEFAULT,840,600,nullptr,nullptr,hi,nullptr);
  if(!gWnd)return 2;
  ShowWindow(gWnd,show);UpdateWindow(gWnd);
  MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
