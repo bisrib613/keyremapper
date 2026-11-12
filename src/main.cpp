@@ -1133,6 +1133,7 @@ static int SelfTest() {
                   (gMaps[0].dstMods&KRM_SHIFT)!=0 &&
                   GetFileAttributesW(ConfigPath().c_str())!=INVALID_FILE_ATTRIBUTES);
  if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 30; }
+ Refresh();
 
  // Modify regression: select the row, load it, change target to #, then save.
  ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
