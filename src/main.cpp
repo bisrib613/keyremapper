@@ -104,6 +104,7 @@ static constexpr COLORREF C_SELECTED=RGB(232,247,252);
 static HBRUSH gBrushBg=nullptr, gBrushSurface=nullptr, gBrushControl=nullptr;
 static HFONT gFontBody=nullptr, gFontSmall=nullptr, gFontTitle=nullptr, gFontLabel=nullptr;
 static HICON gIconLarge=nullptr, gIconSmall=nullptr;
+static HANDLE gInstanceMutex=nullptr;
 
 struct ComboWheelState { HWND combo=nullptr; int delta=0; };
 static ComboWheelState gSourceWheel, gTargetWheel;
@@ -1062,6 +1063,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    if(gBrushBg) DeleteObject(gBrushBg);
    if(gBrushSurface) DeleteObject(gBrushSurface);
    if(gBrushControl) DeleteObject(gBrushControl);
+   if(gInstanceMutex) { ReleaseMutex(gInstanceMutex); CloseHandle(gInstanceMutex); gInstanceMutex=nullptr; }
    gFontBody=gFontSmall=gFontTitle=gFontLabel=nullptr;
    gBrushBg=gBrushSurface=gBrushControl=nullptr;
    PostQuitMessage(0);
@@ -1204,6 +1206,19 @@ static int SelfTest() {
 }
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
+
+ gInstanceMutex=CreateMutexW(nullptr,TRUE,L"Local\\KeyRemapper.SingleInstance");
+ if(!gInstanceMutex) return 3;
+ if(GetLastError()==ERROR_ALREADY_EXISTS) {
+  HWND existing=FindWindowW(L"KRNative",nullptr);
+  if(existing) {
+   if(IsIconic(existing)) ShowWindow(existing,SW_RESTORE);
+   SetForegroundWindow(existing);
+  }
+  CloseHandle(gInstanceMutex);gInstanceMutex=nullptr;
+  return 0;
+ }
+
  INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);SetProcessDPIAware();Load();
 
  gIconLarge=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,32,32,LR_DEFAULTCOLOR);
