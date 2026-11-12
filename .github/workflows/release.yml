@@ -49,15 +49,15 @@ jobs:
           path: dist/KeyRemapper_Setup.exe
           if-no-files-found: error
 
-      - name: Publish v1.4.0
+      - name: Publish v1.5.0
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view v1.4.0 *> $null
+          gh release view v1.5.0 *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create v1.4.0 "dist/KeyRemapper_Setup.exe" --title "Key Remapper Native Rebuild v1.4.0" --notes "Native x86 Win32 rebuild. Per-user installer, no admin elevation, embedded asInvoker manifest and version metadata, no bundled .NET runtime. Includes keyboard/mouse low-level hook smoke test in CI."
+            gh release create v1.5.0 "dist/KeyRemapper_Setup.exe" --title "Key Remapper Native Rebuild v1.5.0" --notes "Native x86 Win32 rebuild. Per-user installer, no admin elevation, embedded asInvoker manifest and version metadata, no bundled .NET runtime. Includes keyboard/mouse low-level hook smoke test in CI."
           } else {
-            gh release upload v1.4.0 "dist/KeyRemapper_Setup.exe" --clobber
+            gh release upload v1.5.0 "dist/KeyRemapper_Setup.exe" --clobber
           }
