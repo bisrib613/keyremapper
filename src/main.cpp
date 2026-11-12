@@ -475,6 +475,10 @@ static void LoadMappingIntoEditor(int index) {
  SetModChecks(m.dstMods&~dstImplicit,gDstShift,gDstCtrl,gDstAlt,gDstWin);
  Button_SetCheck(gBlock,m.block?BST_CHECKED:BST_UNCHECKED);
  EnableWindow(gTarget,!m.block);
+ EnableWindow(gDstShift,!m.block);
+ EnableWindow(gDstCtrl,!m.block);
+ EnableWindow(gDstAlt,!m.block);
+ EnableWindow(gDstWin,!m.block);
  gEditingIndex=index;
  if(gAdd) SetWindowTextW(gAdd,L"Save changes");
  if(gSection) SetWindowTextW(gSection,L"Edit mapping");
@@ -737,7 +741,7 @@ static void CreateUi(HWND h) {
  gListSource=Make(h,L"STATIC",L"Source",SS_LEFT,32,310,220,20,ID_LIST_SOURCE);
  gListTarget=Make(h,L"STATIC",L"Target",SS_LEFT,430,310,220,20,ID_LIST_TARGET);
 
- gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOCOLUMNHEADER,20,336,780,160,ID_LIST,WS_EX_CLIENTEDGE);
+ gList=Make(h,WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOCOLUMNHEADER,20,336,780,160,ID_LIST,0);
  ListView_SetExtendedListViewStyle(gList,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
  ListView_SetBkColor(gList,C_SURFACE);
  ListView_SetTextBkColor(gList,C_SURFACE);
