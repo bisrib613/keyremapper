@@ -1118,6 +1118,22 @@ static int SelfTest() {
                 (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(upsertTarget,L"@")==0);
  if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 28; }
 
+ // Persistence regression: save, reload, then recover from permanent backup.
+ Save();
+ gMaps.clear();
+ Load();
+ bool reloadOk=(gMaps.size()==1 && gMaps[0].target=='2' && (gMaps[0].dstMods&KRM_SHIFT)!=0);
+ if(!reloadOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
+
+ CopyFileW(ConfigPath().c_str(),ConfigBackupPath().c_str(),FALSE);
+ DeleteFileW(ConfigPath().c_str());
+ gMaps.clear();
+ Load();
+ bool recoveryOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
+                  (gMaps[0].dstMods&KRM_SHIFT)!=0 &&
+                  GetFileAttributesW(ConfigPath().c_str())!=INVALID_FILE_ATTRIBUTES);
+ if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 30; }
+
  // Modify regression: select the row, load it, change target to #, then save.
  ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
  ModifySelected();
