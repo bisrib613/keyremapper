@@ -656,7 +656,9 @@ static void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
 static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
  RECT r=d->rcItem;
  COLORREF fill=(d->itemState&ODS_SELECTED)?C_SELECTED:C_SURFACE;
- FillRect(d->hDC,&r,CreateSolidBrush(fill));
+ HBRUSH comboBrush=CreateSolidBrush(fill);
+ FillRect(d->hDC,&r,comboBrush);
+ DeleteObject(comboBrush);
  if(d->itemID==(UINT)-1) return;
 
  wchar_t buf[128]{};
@@ -700,11 +702,11 @@ static void CreateUi(HWND h) {
  BOOL dark=FALSE;
  DwmSetWindowAttribute(h,20,&dark,sizeof(dark));
 
- gIconControl=Make(h,L"STATIC",L"",SS_ICON|SS_REALSIZECONTROL,20,16,28,28,0);
- if(gIconSmall) SendMessageW(gIconControl,STM_SETICON,(WPARAM)gIconSmall,0);
+ gIconControl=Make(h,L"STATIC",L"",SS_ICON|SS_REALSIZECONTROL,20,15,32,32,0);
+ if(gIconLarge) SendMessageW(gIconControl,STM_SETICON,(WPARAM)gIconLarge,0);
 
- gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,58,14,300,28,ID_TITLE);
- gSubtitle=Make(h,L"STATIC",L"Remap keyboard and mouse input.",SS_LEFT,58,40,420,20,ID_SUBTITLE);
+ gTitle=Make(h,L"STATIC",L"Key Remapper",SS_LEFT,62,13,300,28,ID_TITLE);
+ gSubtitle=Make(h,L"STATIC",L"Remap keyboard and mouse input.",SS_LEFT,62,39,420,20,ID_SUBTITLE);
 
  gSection=Make(h,L"STATIC",L"Create mapping",SS_LEFT,32,82,180,22,ID_SECTION);
 
