@@ -22,6 +22,7 @@
 constexpr ULONG_PTR KR_MAGIC = 0x4B524D50;
 constexpr UINT WM_KR_CAPTURE = WM_APP + 1;
 constexpr UINT WM_KR_TRAY = WM_APP + 2;
+constexpr UINT WM_KR_REFRESH = WM_APP + 3;
 constexpr UINT TRAY_ID = 1;
 constexpr UINT ID_TRAY_OPEN = 5001;
 constexpr UINT ID_TRAY_ENABLE = 5002;
@@ -221,6 +222,7 @@ static bool SendCode(int code,bool down) {
  }
  if(SendInput(1,&in,sizeof(in))!=1) {
   gLastInjectionError=GetLastError();
+  if(gWnd) PostMessageW(gWnd,WM_KR_REFRESH,0,0);
   return false;
  }
  return true;
@@ -236,6 +238,7 @@ static void SendTestKey(int vk,bool down) {
 }
 #endif
 static ActiveEmission BeginTarget(const Mapping& m) {
+ gLastInjectionError=ERROR_SUCCESS;
  ActiveEmission a{};
  a.consumed=true;
  a.target=m.target;
@@ -1180,7 +1183,9 @@ static void RemoveMap() {
 static void UpdateTrayIconState() {
  if(!gTrayAdded) return;
  gTray.uFlags=NIF_TIP;
- const wchar_t* state=(!gKeyboard||!gMouse)?L"Hook unavailable":(gPaused?L"Remapping disabled":L"Remapping enabled");
+ const wchar_t* state=(!gKeyboard||!gMouse)?L"Hook unavailable":
+                       (gLastInjectionError!=ERROR_SUCCESS?L"Input injection failed":
+                       (gPaused?L"Remapping disabled":L"Remapping enabled"));
  std::wstring tip=L"Key Remapper - ";
  tip+=state;
  lstrcpynW(gTray.szTip,tip.c_str(),ARRAYSIZE(gTray.szTip));
@@ -1528,6 +1533,12 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    InvalidateRect(h,nullptr,FALSE);
    return 0;
   }
+
+  case WM_KR_REFRESH:
+   Refresh();
+   UpdateTrayIconState();
+   InvalidateRect(h,nullptr,FALSE);
+   return 0;
 
   case WM_KR_TRAY:
    switch((UINT)l) {
