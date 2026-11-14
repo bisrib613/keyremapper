@@ -193,6 +193,12 @@ static void ResetPhysicalModifierState() {
  ZeroMemory(gPhysicalKeyDown,sizeof(gPhysicalKeyDown));
  gPhysicalMods=0;
 }
+static void SyncPhysicalModifierState() {
+ ZeroMemory(gPhysicalKeyDown,sizeof(gPhysicalKeyDown));
+ for(int vk:{VK_LSHIFT,VK_RSHIFT,VK_LCONTROL,VK_RCONTROL,VK_LMENU,VK_RMENU,VK_LWIN,VK_RWIN})
+  gPhysicalKeyDown[vk]=(GetAsyncKeyState(vk)&0x8000)!=0;
+ RecomputePhysicalMods();
+}
 static bool ChoiceForSymbol(wchar_t ch,Choice& out) {
  SHORT encoded=VkKeyScanExW(ch,GetKeyboardLayout(0));
  if(encoded==-1) return false;
@@ -426,6 +432,7 @@ static bool InstallHooks() {
  }
  gKeyboard=keyboard;
  gMouse=mouse;
+ SyncPhysicalModifierState();
  return true;
 }
 static void ReleaseActiveOutputs() {
