@@ -126,7 +126,7 @@ static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
 static int gCaptureSwallow=0;
 static int gCaptureModifierCandidate=0;
 static unsigned gCaptureSuppressedMods=0;
-static unsigned ResetPhysicalModifierState();
+static unsigned gPhysicalMods=0;
 static bool gPhysicalKeyDown[256]{};
 #ifdef KRM_TEST_BUILD
 static bool gSelfTestMode=true;
@@ -191,7 +191,7 @@ static void UpdatePhysicalModifierState(int vk,bool down) {
 }
 static void ResetPhysicalModifierState() {
  ZeroMemory(gPhysicalKeyDown,sizeof(gPhysicalKeyDown));
- ResetPhysicalModifierState();
+ gPhysicalMods=0;
 }
 static bool ChoiceForSymbol(wchar_t ch,Choice& out) {
  SHORT encoded=VkKeyScanExW(ch,GetKeyboardLayout(0));
