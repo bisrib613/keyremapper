@@ -146,6 +146,8 @@ static std::vector<Mapping> gMaps;
 struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; bool consumed=false; };
 static std::vector<ActiveEmission> gActive(0x1200);
 static DWORD gLastInjectionError=ERROR_SUCCESS;
+static bool gConfigLoadFailed=false;
+static bool gConfigSaveFailed=false;
 
 static std::wstring NameOf(int code) {
  for (auto &i:ITEMS) if(i.code==code) return i.name;
