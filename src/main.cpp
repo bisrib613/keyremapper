@@ -1697,7 +1697,7 @@ static int SelfTest() {
  if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
  gMaps.clear();
  if(!Load()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
- bool reloadOk=(gMaps.size()==1 && gMaps[0].target=='2' && (gMaps[0].dstMods&KRM_SHIFT)!=0);
+ bool reloadOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code && gMaps[0].dstMods==atChoice.mods);
  if(!reloadOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
 
  CopyFileW(ConfigPath().c_str(),ConfigBackupPath().c_str(),FALSE);
@@ -1707,8 +1707,8 @@ static int SelfTest() {
  }
  gMaps.clear();
  bool recovered=Load();
- bool recoveryOk=recovered && gMaps.size()==1 && gMaps[0].target=='2' &&
-                 (gMaps[0].dstMods&KRM_SHIFT)!=0;
+ bool recoveryOk=recovered && gMaps.size()==1 && gMaps[0].target==atChoice.code &&
+                 gMaps[0].dstMods==atChoice.mods;
  if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 30; }
 
  // A corrupt primary must never overwrite a healthy backup during the next save.
@@ -1721,8 +1721,8 @@ static int SelfTest() {
  if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
  std::vector<Mapping> backupMaps;
  bool backupPreserved=ReadMappingsFile(ConfigBackupPath(),backupMaps)==ConfigReadResult::Valid &&
-                      backupMaps.size()==1 && backupMaps[0].target=='2' &&
-                      (backupMaps[0].dstMods&KRM_SHIFT)!=0;
+                      backupMaps.size()==1 && backupMaps[0].target==atChoice.code &&
+                      backupMaps[0].dstMods==atChoice.mods;
  if(!backupPreserved) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
 
  gMaps=backupMaps;
