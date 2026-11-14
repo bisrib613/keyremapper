@@ -77,7 +77,7 @@ static const Item ITEMS[] = {
  {MOUSE_X1,L"Mouse X1"},{MOUSE_X2,L"Mouse X2"},{WHEEL_UP,L"Wheel Up"},{WHEEL_DOWN,L"Wheel Down"}
 };
 
-static const wchar_t SYMBOL_CHARS[] = L"!@#$%^&*()_+{}|:\\\"<>?~";
+static const wchar_t SYMBOL_CHARS[] = L"!@#$%^&*()_+{}|:\"<>?~";
 struct Mapping { int source; int target; bool block; unsigned srcMods=0; unsigned dstMods=0; };
 struct Choice { int code=0; unsigned mods=0; };
 static std::vector<Choice> gSourceChoices;
@@ -1326,6 +1326,17 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    LayoutUi(LOWORD(l),HIWORD(l));
    InvalidateRect(h,nullptr,TRUE);
    return 0;
+
+  case WM_INPUTLANGCHANGE: {
+   Choice source=SelectedChoice(gSource,gSourceChoices);
+   Choice target=SelectedChoice(gTarget,gTargetChoices);
+   FillCombo(gSource,gSourceChoices);
+   FillCombo(gTarget,gTargetChoices);
+   SelectChoice(gSource,gSourceChoices,source.code,source.mods);
+   SelectChoice(gTarget,gTargetChoices,target.code,target.mods);
+   Refresh();
+   return 0;
+  }
 
   case WM_DPICHANGED: {
    gDpi=HIWORD(w);
