@@ -19,14 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Validate version metadata
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = (Select-String -Path "installer/KeyRemapper.iss" -Pattern '#define AppVersion "([^"]+)"').Matches.Groups[1].Value
-          $expected = "v" + $version
-          if ($tag -ne $expected) { throw "Tag $tag does not match installer version $expected" }
+          $version = (Get-Content "VERSION" -Raw).Trim()
+          $installerVersion = (Select-String -Path "installer/KeyRemapper.iss" -Pattern '#define AppVersion "([^"]+)"').Matches.Groups[1].Value
+          if ($installerVersion -ne $version) { throw "installer version $installerVersion does not match VERSION $version" }
+
           $parts = $version.Split('.')
           $commaVersion = "$($parts[0]),$($parts[1]),$($parts[2]),0"
           $dotVersion = "$version.0"
@@ -35,6 +34,13 @@ jobs:
           }
           if (-not (Select-String -Path "src/app.manifest" -SimpleMatch "version=`"$dotVersion`"" -Quiet)) {
             throw "app.manifest version does not match $version"
+          }
+
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $expectedTag = "v" + $version
+            if ("${{ github.ref_name }}" -ne $expectedTag) {
+              throw "Tag ${{ github.ref_name }} does not match VERSION $expectedTag"
+            }
           }
 
       - name: Build production and isolated test executables
