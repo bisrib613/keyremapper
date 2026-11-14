@@ -451,7 +451,16 @@ static void Unhook() {
  gKeyboard=gMouse=nullptr;
  ResetPhysicalModifierState();
 }
-static bool Save() { return SaveMappings(gMaps); }
+static bool Save() {
+ bool ok=SaveMappings(gMaps);
+ if(ok) {
+  gConfigSaveFailed=false;
+  if(gConfigLoadStatus==ConfigLoadStatus::MigrationWriteFailed ||
+     gConfigLoadStatus==ConfigLoadStatus::RecoveryWriteFailed)
+    gConfigLoadStatus=ConfigLoadStatus::Ready;
+ }
+ return ok;
+}
 static bool Load() { return LoadMappings(gMaps,&gConfigLoadStatus); }
 
 static LRESULT CALLBACK ComboWheelProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam,UINT_PTR,DWORD_PTR refData) {
