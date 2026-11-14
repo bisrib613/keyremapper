@@ -92,6 +92,7 @@ static std::vector<Choice> gTargetChoices;
 static HINSTANCE gInst;
 static HWND gWnd, gSource, gTarget, gBlock, gList, gPause, gStatus, gStartup;
 static HWND gAdd, gModify, gRemove, gTitle, gSubtitle, gSection, gEmpty, gListSource, gListTarget, gIconControl;
+static HWND gSourceLabel,gTargetLabel,gSrcModsLabel,gDstModsLabel,gMappingsLabel,gCaptureSrc,gCaptureDst;
 static HWND gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin;
 static int gEditingIndex=-1;
 
@@ -120,6 +121,7 @@ static bool gStartupMode=false;
 static bool gRunAtStartup=false;
 static bool gBlockSource=false;
 static UINT gTaskbarCreatedMessage=0;
+static UINT gDpi=96;
 static unsigned gSourceUiMods=0;
 static unsigned gTargetUiMods=0;
 
@@ -948,27 +950,90 @@ static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
  SelectObject(d->hDC,old);
 }
 
+static int S(int value) { return MulDiv(value,(int)gDpi,96); }
+
+static void ApplyAllFonts() {
+ ApplyFont(gTitle,gFontTitle);
+ ApplyFont(gSubtitle,gFontSmall);
+ ApplyFont(gSection,gFontLabel);
+ ApplyFont(gSourceLabel,gFontSmall);
+ ApplyFont(gTargetLabel,gFontSmall);
+ ApplyFont(gSrcModsLabel,gFontSmall);
+ ApplyFont(gDstModsLabel,gFontSmall);
+ ApplyFont(gMappingsLabel,gFontLabel);
+ ApplyFont(gListSource,gFontLabel);
+ ApplyFont(gListTarget,gFontLabel);
+ ApplyFont(gEmpty,gFontSmall);
+ ApplyFont(gStatus,gFontSmall);
+ HWND controls[]={gSource,gCaptureSrc,gTarget,gCaptureDst,gBlock,gAdd,gModify,gRemove,gPause,gStartup,
+  gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
+ for(HWND z:controls) ApplyFont(z,gFontBody);
+ ApplyFont(gList,gFontBody);
+}
+
+static void RecreateFonts(HWND h) {
+ HFONT oldBody=gFontBody,oldSmall=gFontSmall,oldTitle=gFontTitle,oldLabel=gFontLabel;
+ gFontBody=MakeUiFont(h,14,FW_NORMAL);
+ gFontSmall=MakeUiFont(h,12,FW_NORMAL);
+ gFontLabel=MakeUiFont(h,13,FW_SEMIBOLD);
+ gFontTitle=MakeUiFont(h,21,FW_SEMIBOLD);
+ ApplyAllFonts();
+ if(oldBody) DeleteObject(oldBody);
+ if(oldSmall) DeleteObject(oldSmall);
+ if(oldTitle) DeleteObject(oldTitle);
+ if(oldLabel) DeleteObject(oldLabel);
+}
+
 static void LayoutUi(int width,int height) {
  if(!gList) return;
- const int margin=20;
- const int cardLeft=20;
- const int listTop=336;
- const int footerY=height-44;
- const int listBottom=std::max(listTop+118,footerY-16);
- const int listWidth=std::max(610,width-margin*2);
+ const int margin=S(20);
+ const int cardLeft=S(20);
+ const int listTop=S(336);
+ const int footerY=height-S(44);
+ const int listBottom=std::max(listTop+S(118),footerY-S(16));
+ const int listWidth=std::max(S(610),width-margin*2);
  const int half=listWidth/2;
 
- if(gListSource) MoveWindow(gListSource,cardLeft+12,310,half-18,20,TRUE);
- if(gListTarget) MoveWindow(gListTarget,cardLeft+half+6,310,half-18,20,TRUE);
+ MoveWindow(gIconControl,S(20),S(15),S(32),S(32),TRUE);
+ MoveWindow(gTitle,S(62),S(13),S(300),S(28),TRUE);
+ MoveWindow(gSubtitle,S(62),S(39),S(420),S(20),TRUE);
+ MoveWindow(gSection,S(32),S(82),S(180),S(22),TRUE);
+
+ MoveWindow(gSourceLabel,S(32),S(122),S(56),S(20),TRUE);
+ MoveWindow(gSource,S(96),S(112),S(210),S(320),TRUE);
+ MoveWindow(gCaptureSrc,S(316),S(112),S(80),S(32),TRUE);
+ MoveWindow(gSrcModsLabel,S(414),S(122),S(62),S(20),TRUE);
+ MoveWindow(gSrcShift,S(482),S(114),S(52),S(28),TRUE);
+ MoveWindow(gSrcCtrl,S(540),S(114),S(48),S(28),TRUE);
+ MoveWindow(gSrcAlt,S(594),S(114),S(46),S(28),TRUE);
+ MoveWindow(gSrcWin,S(646),S(114),S(48),S(28),TRUE);
+
+ MoveWindow(gTargetLabel,S(32),S(164),S(56),S(20),TRUE);
+ MoveWindow(gTarget,S(96),S(154),S(210),S(320),TRUE);
+ MoveWindow(gCaptureDst,S(316),S(154),S(80),S(32),TRUE);
+ MoveWindow(gDstModsLabel,S(414),S(164),S(62),S(20),TRUE);
+ MoveWindow(gDstShift,S(482),S(156),S(52),S(28),TRUE);
+ MoveWindow(gDstCtrl,S(540),S(156),S(48),S(28),TRUE);
+ MoveWindow(gDstAlt,S(594),S(156),S(46),S(28),TRUE);
+ MoveWindow(gDstWin,S(646),S(156),S(48),S(28),TRUE);
+
+ MoveWindow(gAdd,S(32),S(204),S(108),S(34),TRUE);
+ MoveWindow(gModify,S(150),S(204),S(88),S(34),TRUE);
+ MoveWindow(gRemove,S(248),S(204),S(88),S(34),TRUE);
+ MoveWindow(gBlock,S(366),S(207),S(122),S(28),TRUE);
+
+ MoveWindow(gMappingsLabel,S(32),S(276),S(100),S(22),TRUE);
+ MoveWindow(gListSource,cardLeft+S(12),S(310),half-S(18),S(20),TRUE);
+ MoveWindow(gListTarget,cardLeft+half+S(6),S(310),half-S(18),S(20),TRUE);
  MoveWindow(gList,cardLeft,listTop,listWidth,listBottom-listTop,TRUE);
 
  if(gEmpty) {
-  int emptyW=std::min(380,listWidth-40);
-  MoveWindow(gEmpty,cardLeft+(listWidth-emptyW)/2,listTop+38,emptyW,28,TRUE);
+  int emptyW=std::min(S(380),listWidth-S(40));
+  MoveWindow(gEmpty,cardLeft+(listWidth-emptyW)/2,listTop+S(38),emptyW,S(28),TRUE);
  }
- if(gStartup) MoveWindow(gStartup,margin,footerY,156,28,TRUE);
- if(gStatus) MoveWindow(gStatus,198,footerY+4,std::max(210,width-198-120),20,TRUE);
- if(gPause) MoveWindow(gPause,width-106,footerY-2,86,32,TRUE);
+ MoveWindow(gStartup,margin,footerY,S(156),S(28),TRUE);
+ MoveWindow(gStatus,S(198),footerY+S(4),std::max(S(210),width-S(318)),S(20),TRUE);
+ MoveWindow(gPause,width-S(106),footerY-S(2),S(86),S(32),TRUE);
 
  ListView_SetColumnWidth(gList,0,half);
  ListView_SetColumnWidth(gList,1,listWidth-half);
