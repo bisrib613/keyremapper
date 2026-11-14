@@ -495,18 +495,47 @@ static void FillCombo(HWND h,std::vector<Choice>& choices) {
  }
 }
 static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
- unsigned m=0;
- if(Button_GetCheck(sh)==BST_CHECKED)m|=KRM_SHIFT;
- if(Button_GetCheck(ctrl)==BST_CHECKED)m|=KRM_CTRL;
- if(Button_GetCheck(alt)==BST_CHECKED)m|=KRM_ALT;
- if(Button_GetCheck(win)==BST_CHECKED)m|=KRM_WIN;
- return m;
+ if(sh==gSrcShift) return gSourceUiMods;
+ if(sh==gDstShift) return gTargetUiMods;
+ return 0;
+}
+static void InvalidateModifierGroup(HWND sh,HWND ctrl,HWND alt,HWND win) {
+ for(HWND h:{sh,ctrl,alt,win}) if(h) InvalidateRect(h,nullptr,TRUE);
 }
 static void SetModChecks(unsigned m,HWND sh,HWND ctrl,HWND alt,HWND win) {
- Button_SetCheck(sh,(m&KRM_SHIFT)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(ctrl,(m&KRM_CTRL)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(alt,(m&KRM_ALT)?BST_CHECKED:BST_UNCHECKED);
- Button_SetCheck(win,(m&KRM_WIN)?BST_CHECKED:BST_UNCHECKED);
+ if(sh==gSrcShift) gSourceUiMods=m;
+ else if(sh==gDstShift) gTargetUiMods=m;
+ InvalidateModifierGroup(sh,ctrl,alt,win);
+}
+static unsigned ModifierBitForControlId(int id) {
+ switch(id) {
+  case ID_SRC_SHIFT: case ID_DST_SHIFT: return KRM_SHIFT;
+  case ID_SRC_CTRL: case ID_DST_CTRL: return KRM_CTRL;
+  case ID_SRC_ALT: case ID_DST_ALT: return KRM_ALT;
+  case ID_SRC_WIN: case ID_DST_WIN: return KRM_WIN;
+  default: return 0;
+ }
+}
+static void ToggleModifierControl(int id) {
+ unsigned bit=ModifierBitForControlId(id);
+ if(!bit) return;
+ if(id>=ID_SRC_SHIFT && id<=ID_SRC_WIN) {
+  gSourceUiMods^=bit;
+  InvalidateModifierGroup(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ } else {
+  gTargetUiMods^=bit;
+  InvalidateModifierGroup(gDstShift,gDstCtrl,gDstAlt,gDstWin);
+ }
+}
+static void SetBlockSourceState(bool enabled) {
+ gBlockSource=enabled;
+ if(gBlock) InvalidateRect(gBlock,nullptr,TRUE);
+ BOOL targetEnabled=enabled?FALSE:TRUE;
+ if(gTarget) EnableWindow(gTarget,targetEnabled);
+ if(gDstShift) EnableWindow(gDstShift,targetEnabled);
+ if(gDstCtrl) EnableWindow(gDstCtrl,targetEnabled);
+ if(gDstAlt) EnableWindow(gDstAlt,targetEnabled);
+ if(gDstWin) EnableWindow(gDstWin,targetEnabled);
 }
 static unsigned PreferredImpliedMods(int code,unsigned mods) {
  return ((mods&KRM_SHIFT) && ShiftSymbol(code)) ? KRM_SHIFT : 0;
@@ -535,12 +564,7 @@ static void LoadMappingIntoEditor(int index) {
  SelectChoice(gTarget,gTargetChoices,m.target,dstImplicit);
  SetModChecks(m.srcMods&~srcImplicit,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  SetModChecks(m.dstMods&~dstImplicit,gDstShift,gDstCtrl,gDstAlt,gDstWin);
- Button_SetCheck(gBlock,m.block?BST_CHECKED:BST_UNCHECKED);
- EnableWindow(gTarget,!m.block);
- EnableWindow(gDstShift,!m.block);
- EnableWindow(gDstCtrl,!m.block);
- EnableWindow(gDstAlt,!m.block);
- EnableWindow(gDstWin,!m.block);
+ SetBlockSourceState(m.block);
  gEditingIndex=index;
  if(gAdd) SetWindowTextW(gAdd,L"Save changes");
  if(gSection) SetWindowTextW(gSection,L"Edit mapping");
@@ -847,7 +871,7 @@ static void CreateUi(HWND h) {
 static void AddMap() {
  Mapping m;
  m.source=ComboCode(gSource,gSourceChoices); m.target=ComboCode(gTarget,gTargetChoices);
- m.block=Button_GetCheck(gBlock)==BST_CHECKED;
+ m.block=gBlockSource;
  m.srcMods=CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin) | ComboImpliedMods(gSource,gSourceChoices);
  m.dstMods=CheckedMods(gDstShift,gDstCtrl,gDstAlt,gDstWin) | ComboImpliedMods(gTarget,gTargetChoices);
  if(!m.source||(!m.block&&!m.target)) return;
