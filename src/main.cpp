@@ -126,7 +126,8 @@ static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
 static int gCaptureSwallow=0;
 static int gCaptureModifierCandidate=0;
 static unsigned gCaptureSuppressedMods=0;
-static unsigned gPhysicalMods=0;
+static unsigned ResetPhysicalModifierState();
+static bool gPhysicalKeyDown[256]{};
 #ifdef KRM_TEST_BUILD
 static bool gSelfTestMode=true;
 static int gSelfCapturedCode=0;
@@ -163,6 +164,34 @@ static int VkForMod(unsigned bit) {
  if(bit==KRM_ALT) return VK_MENU;
  if(bit==KRM_WIN) return VK_LWIN;
  return 0;
+}
+static int NormalizeModifierVk(const KBDLLHOOKSTRUCT& k) {
+ int vk=(int)k.vkCode;
+ if(vk==VK_SHIFT) {
+  UINT mapped=MapVirtualKeyW(k.scanCode,MAPVK_VSC_TO_VK_EX);
+  if(mapped==VK_LSHIFT||mapped==VK_RSHIFT) return (int)mapped;
+ }
+ if(vk==VK_CONTROL) return (k.flags&LLKHF_EXTENDED)?VK_RCONTROL:VK_LCONTROL;
+ if(vk==VK_MENU) return (k.flags&LLKHF_EXTENDED)?VK_RMENU:VK_LMENU;
+ return vk;
+}
+static void RecomputePhysicalMods() {
+ unsigned mods=0;
+ if(gPhysicalKeyDown[VK_LSHIFT]||gPhysicalKeyDown[VK_RSHIFT]) mods|=KRM_SHIFT;
+ if(gPhysicalKeyDown[VK_LCONTROL]||gPhysicalKeyDown[VK_RCONTROL]) mods|=KRM_CTRL;
+ if(gPhysicalKeyDown[VK_LMENU]||gPhysicalKeyDown[VK_RMENU]) mods|=KRM_ALT;
+ if(gPhysicalKeyDown[VK_LWIN]||gPhysicalKeyDown[VK_RWIN]) mods|=KRM_WIN;
+ gPhysicalMods=mods;
+}
+static void UpdatePhysicalModifierState(int vk,bool down) {
+ if(vk>=0 && vk<256 && ModBitForVk(vk)) {
+  gPhysicalKeyDown[vk]=down;
+  RecomputePhysicalMods();
+ }
+}
+static void ResetPhysicalModifierState() {
+ ZeroMemory(gPhysicalKeyDown,sizeof(gPhysicalKeyDown));
+ ResetPhysicalModifierState();
 }
 static bool ChoiceForSymbol(wchar_t ch,Choice& out) {
  SHORT encoded=VkKeyScanExW(ch,GetKeyboardLayout(0));
@@ -363,15 +392,10 @@ static LRESULT CALLBACK KeyHook(int n,WPARAM w,LPARAM l) {
  bool d=w==WM_KEYDOWN||w==WM_SYSKEYDOWN,u=w==WM_KEYUP||w==WM_SYSKEYUP;
  if(!d&&!u) return CallNextHookEx(gKeyboard,n,w,l);
 
- int vk=(int)k->vkCode;
- unsigned bit=ModBitForVk(vk);
+ int vk=NormalizeModifierVk(*k);
  unsigned modsForMatch=gPhysicalMods;
  bool consumed=Handle(vk,d,false,modsForMatch);
-
- if(bit) {
-  if(d) gPhysicalMods|=bit;
-  else gPhysicalMods&=~bit;
- }
+ UpdatePhysicalModifierState(vk,d);
  if(consumed)return 1;
  return CallNextHookEx(gKeyboard,n,w,l);
 }
@@ -1733,7 +1757,7 @@ static int SelfTest() {
 
  if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
 
- gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0; gCaptureSource=true; gCaptureTarget=false;
+ gSelfCapturedCode=0; gSelfCapturedMods=0; ResetPhysicalModifierState(); gCaptureSource=true; gCaptureTarget=false;
  SendTestKey(VK_SHIFT,true);
  SendTestKey('2',true);
  SendTestKey('2',false);
@@ -1754,7 +1778,7 @@ static int SelfTest() {
  }
 
  // Modifier-only capture must complete on modifier release without leaking the key to Windows.
- gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0;
+ gSelfCapturedCode=0; gSelfCapturedMods=0; ResetPhysicalModifierState();
  gCaptureSource=true; gCaptureTarget=false; gCaptureModifierCandidate=0; gCaptureSuppressedMods=0;
  SendTestKey(VK_LSHIFT,true);
  SendTestKey(VK_LSHIFT,false);
@@ -1769,7 +1793,7 @@ static int SelfTest() {
  }
 
  // Escape is a valid capturable key, not an implicit cancel key.
- gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0;
+ gSelfCapturedCode=0; gSelfCapturedMods=0; ResetPhysicalModifierState();
  gCaptureSource=false; gCaptureTarget=true; gCaptureSwallow=0;
  SendTestKey(VK_ESCAPE,true);
  SendTestKey(VK_ESCAPE,false);
@@ -1783,7 +1807,7 @@ static int SelfTest() {
  }
 
  // Runtime emission test: A must produce Shift+2, not bare 2.
- gCaptureSource=gCaptureTarget=false; gCaptureSwallow=0; gPhysicalMods=0; gPaused=false;
+ gCaptureSource=gCaptureTarget=false; gCaptureSwallow=0; ResetPhysicalModifierState(); gPaused=false;
  gMaps.clear(); gMaps.push_back({'A','2',false,0,KRM_SHIFT});
  gSelfOutputEvents.clear(); gSelfObserveOutput=true;
  SendTestKey('A',true);
@@ -1843,7 +1867,7 @@ static int SelfTest() {
 
  // A modifier key can be a source without requiring itself in srcMods.
  gMaps.clear(); gMaps.push_back({VK_LSHIFT,'A',false,0,0});
- gPhysicalMods=0; gPaused=false; gSelfOutputEvents.clear(); gSelfObserveOutput=true;
+ ResetPhysicalModifierState(); gPaused=false; gSelfOutputEvents.clear(); gSelfObserveOutput=true;
  SendTestKey(VK_LSHIFT,true);
  SendTestKey(VK_LSHIFT,false);
  until=GetTickCount()+1000;
