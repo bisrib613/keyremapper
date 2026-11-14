@@ -1299,8 +1299,22 @@ static int SelfTest() {
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"",WS_OVERLAPPED,0,0,715,525,nullptr,nullptr,gInst,nullptr);
  if(!gWnd) return 20;
 
- // UI-selection test: choose @ directly in the Target combo, then Add/Update.
+ // Tray window lifecycle helpers: hide must keep the window/process alive, show must restore it.
  CreateUi(gWnd);
+ ShowWindow(gWnd,SW_SHOW);
+ HideDashboard();
+ bool hideOk=!IsWindowVisible(gWnd);
+ ShowDashboard();
+ bool showOk=IsWindowVisible(gWnd)!=FALSE;
+ if(!(hideOk&&showOk)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 31; }
+
+ // Explicit owner-draw toggle state must survive without BM_GETCHECK.
+ SetModChecks(KRM_SHIFT,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ bool modifierStateOk=(CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin)&KRM_SHIFT)!=0;
+ SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
+ if(!modifierStateOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 32; }
+
+ // UI-selection test: choose @ directly in the Target combo, then Add/Update.
  SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
  SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
@@ -1377,9 +1391,10 @@ static int SelfTest() {
  // Startup regression: toggle HKCU Run and restore the original state.
  bool startupInitial=StartupEnabled();
  bool startupOn=SetStartupEnabled(true) && StartupEnabled();
+ bool startupCommandOk=StartupCommandValue().find(L"--startup")!=std::wstring::npos;
  bool startupOff=SetStartupEnabled(false) && !StartupEnabled();
  bool startupRestore=SetStartupEnabled(startupInitial);
- if(!(startupOn&&startupOff&&startupRestore)) {
+ if(!(startupOn&&startupCommandOk&&startupOff&&startupRestore)) {
   DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 27;
  }
  gRunAtStartup=startupInitial; if(gStartup) InvalidateRect(gStartup,nullptr,TRUE);
@@ -1429,9 +1444,45 @@ static int SelfTest() {
     outputOk=true; break;
   }
  }
+ if(!outputOk) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 23;
+ }
+
+ // Disabling remapping while a mapped key is held must release its synthetic output.
+ gMaps.clear(); gMaps.push_back({'B','2',false,0,KRM_SHIFT});
+ gSelfOutputEvents.clear(); gSelfObserveOutput=true; gPaused=false;
+ SendTestKey('B',true);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfOutputEvents.size()<2) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+  Sleep(5);
+ }
+ SetRemappingEnabled(false);
+ SendTestKey('B',false);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfOutputEvents.size()<4) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+  Sleep(5);
+ }
+ gSelfObserveOutput=false;
+ bool releasedOk=gPaused && !gActive['B'].target;
+ bool sawRelease=false;
+ for(size_t i=0;i+3<gSelfOutputEvents.size();++i) {
+  if(isShiftVk(gSelfOutputEvents[i].vk) && gSelfOutputEvents[i].down &&
+     gSelfOutputEvents[i+1].vk=='2' && gSelfOutputEvents[i+1].down &&
+     gSelfOutputEvents[i+2].vk=='2' && !gSelfOutputEvents[i+2].down &&
+     isShiftVk(gSelfOutputEvents[i+3].vk) && !gSelfOutputEvents[i+3].down) {
+    sawRelease=true; break;
+  }
+ }
+ SetRemappingEnabled(true);
+ if(!(releasedOk&&sawRelease)) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 33;
+ }
+
  Unhook();
  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
- return outputOk?0:23;
+ return 0;
 }
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;
