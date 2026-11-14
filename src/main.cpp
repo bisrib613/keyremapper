@@ -1645,15 +1645,27 @@ static int SelfTest() {
  bool showOk=IsWindowVisible(gWnd)!=FALSE;
  if(!(hideOk&&showOk)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 31; }
 
+ // Left/right modifier state must survive releasing only one side.
+ ResetPhysicalModifierState();
+ UpdatePhysicalModifierState(VK_LSHIFT,true);
+ UpdatePhysicalModifierState(VK_RSHIFT,true);
+ UpdatePhysicalModifierState(VK_LSHIFT,false);
+ bool dualShiftOk=(gPhysicalMods&KRM_SHIFT)!=0;
+ UpdatePhysicalModifierState(VK_RSHIFT,false);
+ dualShiftOk=dualShiftOk && (gPhysicalMods&KRM_SHIFT)==0;
+ if(!dualShiftOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 39; }
+
  // Explicit owner-draw toggle state must survive without BM_GETCHECK.
  SetModChecks(KRM_SHIFT,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  bool modifierStateOk=(CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin)&KRM_SHIFT)!=0;
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  if(!modifierStateOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 32; }
 
- // UI-selection test: choose @ directly in the Target combo, then Add/Update.
+ // UI-selection test: resolve @ from the active keyboard layout, then Add/Update.
+ Choice atChoice{};
+ if(!ChoiceForSymbol(L'@',atChoice)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
  SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
- SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
+ SelectChoice(gTarget,gTargetChoices,atChoice.code,atChoice.mods);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
  SetBlockSourceState(false);
@@ -1661,24 +1673,24 @@ static int SelfTest() {
  AddMap();
  wchar_t listTarget[64]{};
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,listTarget,64);
- bool uiSelectionOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
-                     (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(listTarget,L"@")==0);
+ bool uiSelectionOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code &&
+                     gMaps[0].dstMods==atChoice.mods && wcscmp(listTarget,L"@")==0);
  if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
 
- // Regression for real UI case: an existing source mapping must be replaced by Add mapping.
+ // Existing source mapping must be replaced by Add mapping, not silently rejected.
  gMaps.clear();
  gMaps.push_back({VK_OEM_3,'2',false,0,0});
  Refresh();
  SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
- SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
+ SelectChoice(gTarget,gTargetChoices,atChoice.code,atChoice.mods);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
  SetBlockSourceState(false);
  AddMap();
  wchar_t upsertTarget[64]{};
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,upsertTarget,64);
- bool upsertOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
-                (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(upsertTarget,L"@")==0);
+ bool upsertOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code &&
+                gMaps[0].dstMods==atChoice.mods && wcscmp(upsertTarget,L"@")==0);
  if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 28; }
 
  // Persistence regression: reload, recover corrupt primary, and preserve last-known-good backup.
@@ -1718,16 +1730,18 @@ static int SelfTest() {
  Refresh();
 
  // Modify regression: select the row, load it, change target to #, then save.
+ Choice hashChoice{};
+ if(!ChoiceForSymbol(L'#',hashChoice)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 25; }
  ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
  ModifySelected();
  bool modifyLoaded=(gEditingIndex==0);
- SelectChoice(gTarget,gTargetChoices,'3',KRM_SHIFT);
+ SelectChoice(gTarget,gTargetChoices,hashChoice.code,hashChoice.mods);
  SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
  AddMap();
  wchar_t modifiedTarget[64]{};
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,modifiedTarget,64);
- bool modifyOk=modifyLoaded && gMaps.size()==1 && gMaps[0].target=='3' &&
-               (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(modifiedTarget,L"#")==0;
+ bool modifyOk=modifyLoaded && gMaps.size()==1 && gMaps[0].target==hashChoice.code &&
+               gMaps[0].dstMods==hashChoice.mods && wcscmp(modifiedTarget,L"#")==0;
  if(!modifyOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 25; }
 
  // Wheel regression: one 120 detent = one item; two 60 deltas = one item total.
