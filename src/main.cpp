@@ -384,10 +384,20 @@ static void Unhook() {
  if(gMouse)UnhookWindowsHookEx(gMouse);
  gKeyboard=gMouse=nullptr;
 }
+enum class ConfigReadResult { Missing, Valid, Invalid };
+
 static std::wstring ConfigDir() {
+#ifdef KRM_TEST_BUILD
+ wchar_t p[MAX_PATH]{};
+ GetTempPathW(MAX_PATH,p);
+ wchar_t suffix[64]{};
+ wsprintfW(suffix,L"KeyRemapperTests-%lu",(unsigned long)GetCurrentProcessId());
+ std::wstring d=std::wstring(p)+suffix;
+#else
  wchar_t p[MAX_PATH]{};
  SHGetFolderPathW(nullptr,CSIDL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,p);
  std::wstring d=std::wstring(p)+L"\\KeyRemapperClean";
+#endif
  CreateDirectoryW(d.c_str(),nullptr);
  return d;
 }
@@ -395,17 +405,23 @@ static std::wstring ConfigPath() { return ConfigDir()+L"\\mappings.txt"; }
 static std::wstring ConfigBackupPath() { return ConfigDir()+L"\\mappings.bak"; }
 static std::wstring ConfigTempPath() { return ConfigDir()+L"\\mappings.tmp"; }
 static const wchar_t* STARTUP_RUN_KEY=L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static const wchar_t* STARTUP_VALUE=L"KeyRemapper";
+static const wchar_t* StartupValueName() {
+#ifdef KRM_TEST_BUILD
+ return L"KeyRemapper.Test";
+#else
+ return L"KeyRemapper";
+#endif
+}
 
 static std::wstring StartupCommandValue() {
  HKEY key=nullptr;
  if(RegOpenKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,KEY_QUERY_VALUE,&key)!=ERROR_SUCCESS) return L"";
  DWORD type=0,size=0;
- if(RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,nullptr,&size)!=ERROR_SUCCESS || type!=REG_SZ || size<sizeof(wchar_t)) {
+ if(RegQueryValueExW(key,StartupValueName(),nullptr,&type,nullptr,&size)!=ERROR_SUCCESS || type!=REG_SZ || size<sizeof(wchar_t)) {
   RegCloseKey(key); return L"";
  }
  std::vector<wchar_t> buf(size/sizeof(wchar_t)+1,0);
- if(RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,reinterpret_cast<BYTE*>(buf.data()),&size)!=ERROR_SUCCESS) {
+ if(RegQueryValueExW(key,StartupValueName(),nullptr,&type,reinterpret_cast<BYTE*>(buf.data()),&size)!=ERROR_SUCCESS) {
   RegCloseKey(key); return L"";
  }
  RegCloseKey(key);
@@ -422,14 +438,142 @@ static bool SetStartupEnabled(bool enabled) {
   wchar_t exe[MAX_PATH]{};
   if(!GetModuleFileNameW(nullptr,exe,MAX_PATH)) { RegCloseKey(key); return false; }
   std::wstring command=L"\""+std::wstring(exe)+L"\" --startup";
-  result=RegSetValueExW(key,STARTUP_VALUE,0,REG_SZ,
+  result=RegSetValueExW(key,StartupValueName(),0,REG_SZ,
     reinterpret_cast<const BYTE*>(command.c_str()),(DWORD)((command.size()+1)*sizeof(wchar_t)));
  } else {
-  result=RegDeleteValueW(key,STARTUP_VALUE);
+  result=RegDeleteValueW(key,StartupValueName());
   if(result==ERROR_FILE_NOT_FOUND) result=ERROR_SUCCESS;
  }
  RegCloseKey(key);
  return result==ERROR_SUCCESS;
+}
+
+static bool ValidMapping(const Mapping& m) {
+ if(m.source<=0 || m.source>=(int)gActive.size()) return false;
+ if(!m.block && (m.target<=0 || m.target>=(int)gActive.size())) return false;
+ if((m.srcMods|m.dstMods)&~(KRM_SHIFT|KRM_CTRL|KRM_ALT|KRM_WIN)) return false;
+ return true;
+}
+
+static ConfigReadResult ReadMappingsFile(const std::wstring& path,std::vector<Mapping>& out) {
+ std::wifstream f(path);
+ if(!f) return ConfigReadResult::Missing;
+
+ std::wstring first;
+ if(!std::getline(f,first)) {
+  // Legacy v1.x allowed an empty file to mean zero mappings.
+  out.clear();
+  return ConfigReadResult::Valid;
+ }
+
+ if(first.rfind(L"KRM_CONFIG ",0)==0) {
+  std::wistringstream header(first);
+  std::wstring magic; int version=0;
+  if(!(header>>magic>>version) || magic!=L"KRM_CONFIG" || version!=2) return ConfigReadResult::Invalid;
+
+  std::wstring countLine;
+  if(!std::getline(f,countLine)) return ConfigReadResult::Invalid;
+  std::wistringstream countIn(countLine);
+  std::wstring key; size_t expected=0;
+  if(!(countIn>>key>>expected) || key!=L"COUNT" || expected>4096) return ConfigReadResult::Invalid;
+
+  std::vector<Mapping> parsed;
+  parsed.reserve(expected);
+  std::wstring line;
+  while(std::getline(f,line)) {
+   if(line.empty()) continue;
+   std::wistringstream in(line);
+   int src=0,dst=0,block=0; unsigned sm=0,dm=0;
+   if(!(in>>src>>dst>>block>>sm>>dm)) return ConfigReadResult::Invalid;
+   if(block!=0 && block!=1) return ConfigReadResult::Invalid;
+   Mapping m{src,dst,block!=0,sm,dm};
+   if(!ValidMapping(m)) return ConfigReadResult::Invalid;
+   parsed.push_back(m);
+  }
+  if(parsed.size()!=expected) return ConfigReadResult::Invalid;
+  out=std::move(parsed);
+  return ConfigReadResult::Valid;
+ }
+
+ // Legacy format migration: every non-empty row must be valid.
+ std::vector<Mapping> parsed;
+ auto parseLegacy=[&](const std::wstring& line)->bool {
+  if(line.empty()) return true;
+  std::wistringstream in(line);
+  int src=0,dst=0,block=0; unsigned sm=0,dm=0;
+  if(!(in>>src>>dst>>block)) return false;
+  if(!(in>>sm>>dm)) { sm=0; dm=0; }
+  if(block!=0 && block!=1) return false;
+  Mapping m{src,dst,block!=0,sm,dm};
+  if(!ValidMapping(m)) return false;
+  parsed.push_back(m);
+  return true;
+ };
+ if(!parseLegacy(first)) return ConfigReadResult::Invalid;
+ std::wstring line;
+ while(std::getline(f,line)) if(!parseLegacy(line)) return ConfigReadResult::Invalid;
+ out=std::move(parsed);
+ return ConfigReadResult::Valid;
+}
+
+static bool WriteMappingsFile(const std::wstring& path,const std::vector<Mapping>& maps) {
+ std::wofstream f(path,std::ios::trunc);
+ if(!f) return false;
+ f<<L"KRM_CONFIG 2\n";
+ f<<L"COUNT "<<maps.size()<<L"\n";
+ for(const auto&m:maps)
+  f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L' '<<m.srcMods<<L' '<<m.dstMods<<L'\n';
+ f.flush();
+ return (bool)f;
+}
+
+static bool Save() {
+ const std::wstring path=ConfigPath();
+ const std::wstring temp=ConfigTempPath();
+ const std::wstring backup=ConfigBackupPath();
+
+ if(!WriteMappingsFile(temp,gMaps)) return false;
+
+ std::vector<Mapping> existing;
+ if(ReadMappingsFile(path,existing)==ConfigReadResult::Valid)
+  CopyFileW(path.c_str(),backup.c_str(),FALSE);
+
+ if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
+  DeleteFileW(temp.c_str());
+  return false;
+ }
+
+ std::vector<Mapping> verify;
+ if(ReadMappingsFile(path,verify)!=ConfigReadResult::Valid) return false;
+
+ if(GetFileAttributesW(backup.c_str())==INVALID_FILE_ATTRIBUTES)
+  CopyFileW(path.c_str(),backup.c_str(),FALSE);
+ return true;
+}
+
+static bool Load() {
+ gMaps.clear();
+ const std::wstring primary=ConfigPath();
+ const std::wstring backup=ConfigBackupPath();
+
+ std::vector<Mapping> parsed;
+ ConfigReadResult primaryResult=ReadMappingsFile(primary,parsed);
+ if(primaryResult==ConfigReadResult::Valid) {
+  gMaps=std::move(parsed);
+  // Migrate legacy content to the versioned format on first successful load.
+  std::wifstream check(primary);
+  std::wstring first; std::getline(check,first);
+  if(first.rfind(L"KRM_CONFIG ",0)!=0) Save();
+  return true;
+ }
+
+ std::vector<Mapping> recovered;
+ if(ReadMappingsFile(backup,recovered)==ConfigReadResult::Valid) {
+  gMaps=std::move(recovered);
+  WriteMappingsFile(primary,gMaps);
+  return true;
+ }
+ return primaryResult==ConfigReadResult::Missing;
 }
 
 static LRESULT CALLBACK ComboWheelProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam,UINT_PTR,DWORD_PTR refData) {
