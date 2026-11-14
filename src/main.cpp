@@ -1040,6 +1040,7 @@ static void LayoutUi(int width,int height) {
 }
 
 static void CreateUi(HWND h) {
+ gDpi=GetDpiForWindow(h);
  EnsureUiResources(h);
  BOOL dark=FALSE;
  DwmSetWindowAttribute(h,20,&dark,sizeof(dark));
@@ -1052,19 +1053,19 @@ static void CreateUi(HWND h) {
 
  gSection=Make(h,L"STATIC",L"Create mapping",SS_LEFT,32,82,180,22,ID_SECTION);
 
- Make(h,L"STATIC",L"Source",SS_LEFT,32,122,56,20,0);
+ gSourceLabel=Make(h,L"STATIC",L"Source",SS_LEFT,32,122,56,20,0);
  gSource=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,112,210,320,ID_SOURCE);
- HWND cs=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,112,80,32,ID_CAP_SRC);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,122,62,20,0);
+ gCaptureSrc=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,112,80,32,ID_CAP_SRC);
+ gSrcModsLabel=Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,122,62,20,0);
  gSrcShift=Make(h,L"BUTTON",L"Shift",BS_OWNERDRAW,482,114,52,28,ID_SRC_SHIFT);
  gSrcCtrl=Make(h,L"BUTTON",L"Ctrl",BS_OWNERDRAW,540,114,48,28,ID_SRC_CTRL);
  gSrcAlt=Make(h,L"BUTTON",L"Alt",BS_OWNERDRAW,594,114,46,28,ID_SRC_ALT);
  gSrcWin=Make(h,L"BUTTON",L"Win",BS_OWNERDRAW,646,114,48,28,ID_SRC_WIN);
 
- Make(h,L"STATIC",L"Target",SS_LEFT,32,164,56,20,0);
+ gTargetLabel=Make(h,L"STATIC",L"Target",SS_LEFT,32,164,56,20,0);
  gTarget=Make(h,WC_COMBOBOXW,L"",CBS_DROPDOWNLIST|CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|WS_VSCROLL,96,154,210,320,ID_TARGET);
- HWND ct=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,154,80,32,ID_CAP_DST);
- Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,164,62,20,0);
+ gCaptureDst=Make(h,L"BUTTON",L"Capture",BS_OWNERDRAW,316,154,80,32,ID_CAP_DST);
+ gDstModsLabel=Make(h,L"STATIC",L"Modifiers",SS_LEFT,414,164,62,20,0);
  gDstShift=Make(h,L"BUTTON",L"Shift",BS_OWNERDRAW,482,156,52,28,ID_DST_SHIFT);
  gDstCtrl=Make(h,L"BUTTON",L"Ctrl",BS_OWNERDRAW,540,156,48,28,ID_DST_CTRL);
  gDstAlt=Make(h,L"BUTTON",L"Alt",BS_OWNERDRAW,594,156,46,28,ID_DST_ALT);
@@ -1075,7 +1076,7 @@ static void CreateUi(HWND h) {
  gRemove=Make(h,L"BUTTON",L"Remove",BS_OWNERDRAW,248,204,88,34,ID_REMOVE);
  gBlock=Make(h,L"BUTTON",L"Block source",BS_OWNERDRAW,366,207,122,28,ID_BLOCK);
 
- Make(h,L"STATIC",L"Mappings",SS_LEFT,32,276,100,22,0);
+ gMappingsLabel=Make(h,L"STATIC",L"Mappings",SS_LEFT,32,276,100,22,0);
  gListSource=Make(h,L"STATIC",L"Source",SS_LEFT,32,310,220,20,ID_LIST_SOURCE);
  gListTarget=Make(h,L"STATIC",L"Target",SS_LEFT,430,310,220,20,ID_LIST_TARGET);
 
@@ -1093,18 +1094,7 @@ static void CreateUi(HWND h) {
  gStatus=Make(h,L"STATIC",L"",SS_LEFT,198,528,420,20,ID_STATUS);
  gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,714,522,86,32,ID_PAUSE);
 
- ApplyFont(gTitle,gFontTitle);
- ApplyFont(gSubtitle,gFontSmall);
- ApplyFont(gSection,gFontLabel);
- ApplyFont(gListSource,gFontLabel);
- ApplyFont(gListTarget,gFontLabel);
- ApplyFont(gEmpty,gFontSmall);
- ApplyFont(gStatus,gFontSmall);
-
- HWND controls[]={gSource,cs,gTarget,ct,gBlock,gAdd,gModify,gRemove,gPause,gStartup,
-  gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin,gDstShift,gDstCtrl,gDstAlt,gDstWin};
- for(HWND z:controls) ApplyFont(z,gFontBody);
- ApplyFont(gList,gFontBody);
+ ApplyAllFonts();
 
  SetWindowTheme(gSource,L"Explorer",nullptr);
  SetWindowTheme(gTarget,L"Explorer",nullptr);
