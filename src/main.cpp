@@ -1056,7 +1056,9 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_CREATE:
    CreateUi(h);
    InstallHooks();
+   AddTrayIcon(h);
    Refresh();
+   UpdateTrayIconState();
    return 0;
 
   case WM_SIZE:
@@ -1159,9 +1161,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    int notification=HIWORD(w);
 
    if(IsModifierId(id) && notification==BN_CLICKED) {
-    HWND btn=GetDlgItem(h,id);
-    Button_SetCheck(btn,Button_GetCheck(btn)==BST_CHECKED?BST_UNCHECKED:BST_CHECKED);
-    InvalidateRect(btn,nullptr,TRUE);
+    ToggleModifierControl(id);
     return 0;
    }
 
@@ -1184,34 +1184,22 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
      RemoveMap();
      break;
     case ID_PAUSE:
-     gPaused=!gPaused;
+     SetRemappingEnabled(gPaused);
      Refresh();
      InvalidateRect(h,nullptr,TRUE);
+     UpdateTrayIconState();
      break;
     case ID_BLOCK:
-     if(notification==BN_CLICKED) {
-      Button_SetCheck(gBlock,Button_GetCheck(gBlock)==BST_CHECKED?BST_UNCHECKED:BST_CHECKED);
-      BOOL enabled=Button_GetCheck(gBlock)!=BST_CHECKED;
-      EnableWindow(gTarget,enabled);
-      EnableWindow(gDstShift,enabled);
-      EnableWindow(gDstCtrl,enabled);
-      EnableWindow(gDstAlt,enabled);
-      EnableWindow(gDstWin,enabled);
-      InvalidateRect(gBlock,nullptr,TRUE);
-     }
+     if(notification==BN_CLICKED) SetBlockSourceState(!gBlockSource);
      break;
     case ID_STARTUP:
      if(notification==BN_CLICKED) {
-      bool oldState=Button_GetCheck(gStartup)==BST_CHECKED;
-      bool enabled=!oldState;
-      Button_SetCheck(gStartup,enabled?BST_CHECKED:BST_UNCHECKED);
-      if(!SetStartupEnabled(enabled)) {
-       Button_SetCheck(gStartup,oldState?BST_CHECKED:BST_UNCHECKED);
-       SetWindowTextW(gStatus,L"Could not update the Windows startup setting");
+      bool next=!gRunAtStartup;
+      if(!ApplyRunAtStartup(next)) {
+       SetWindowTextW(gStatus,L"Could not update Run at startup");
       } else {
-       SetWindowTextW(gStatus,enabled?L"Starts with Windows":L"Start with Windows disabled");
+       SetWindowTextW(gStatus,next?L"Run at startup enabled":L"Run at startup disabled");
       }
-      InvalidateRect(gStartup,nullptr,TRUE);
      }
      break;
    }
@@ -1236,11 +1224,36 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    return 0;
   }
 
+  case WM_KR_TRAY:
+   switch((UINT)l) {
+    case WM_LBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+     ShowDashboard();
+     break;
+    case WM_RBUTTONUP:
+    case WM_CONTEXTMENU:
+     ShowTrayMenu();
+     break;
+   }
+   return 0;
+
+  case WM_QUERYENDSESSION:
+   return TRUE;
+
+  case WM_ENDSESSION:
+   if(w) {
+    gExitRequested=true;
+    DestroyWindow(h);
+   }
+   return 0;
+
   case WM_CLOSE:
-   DestroyWindow(h);
+   if(gExitRequested) DestroyWindow(h);
+   else HideDashboard();
    return 0;
 
   case WM_DESTROY:
+   RemoveTrayIcon();
    Save();
    Unhook();
    if(gIconLarge) DestroyIcon(gIconLarge);
