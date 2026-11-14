@@ -451,6 +451,7 @@ static void Unhook() {
  if(gKeyboard)UnhookWindowsHookEx(gKeyboard);
  if(gMouse)UnhookWindowsHookEx(gMouse);
  gKeyboard=gMouse=nullptr;
+ ResetPhysicalModifierState();
 }
 enum class ConfigReadResult { Missing, Valid, Invalid };
 
