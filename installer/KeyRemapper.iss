@@ -15,14 +15,11 @@ SolidCompression=yes
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\KeyRemapper.exe
 WizardStyle=modern
-CloseApplications=yes
+CloseApplications=force
 RestartApplications=no
-AppMutex=Local\KeyRemapper.SingleInstance
 SetupIconFile=..\assets\keyremapper.ico
 
 [Files]
-; Preserve the user's current mappings before replacing the executable.
-Source: "{userappdata}\KeyRemapperClean\mappings.txt"; DestDir: "{userappdata}\KeyRemapperClean"; DestName: "mappings.bak"; Flags: external skipifsourcedoesntexist uninsneveruninstall
 Source: "..\build\KeyRemapper.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
