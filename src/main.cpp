@@ -321,9 +321,20 @@ static bool InstallHooks() {
  gMouse=SetWindowsHookExW(WH_MOUSE_LL,MouseHook,gInst,0);
  return gKeyboard&&gMouse;
 }
+static void ReleaseActiveOutputs() {
+ for(size_t i=0;i<gActive.size();++i) {
+  if(gActive[i].target) EndTarget(gActive[i]);
+  gActive[i]=ActiveEmission{};
+ }
+}
+static void SetRemappingEnabled(bool enabled) {
+ if(!enabled) ReleaseActiveOutputs();
+ gPaused=!enabled;
+}
 static void Unhook() {
- for(size_t i=0;i<gActive.size();++i)if(gActive[i].target)EndTarget(gActive[i]);
- if(gKeyboard)UnhookWindowsHookEx(gKeyboard);if(gMouse)UnhookWindowsHookEx(gMouse);
+ ReleaseActiveOutputs();
+ if(gKeyboard)UnhookWindowsHookEx(gKeyboard);
+ if(gMouse)UnhookWindowsHookEx(gMouse);
  gKeyboard=gMouse=nullptr;
 }
 static std::wstring ConfigDir() {
@@ -354,7 +365,7 @@ static bool SetStartupEnabled(bool enabled) {
  if(enabled) {
   wchar_t exe[MAX_PATH]{};
   if(!GetModuleFileNameW(nullptr,exe,MAX_PATH)) { RegCloseKey(key); return false; }
-  std::wstring command=L"\""+std::wstring(exe)+L"\"";
+  std::wstring command=L"\""+std::wstring(exe)+L"\" --startup";
   result=RegSetValueExW(key,STARTUP_VALUE,0,REG_SZ,
     reinterpret_cast<const BYTE*>(command.c_str()),(DWORD)((command.size()+1)*sizeof(wchar_t)));
  } else {
