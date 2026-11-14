@@ -1598,9 +1598,10 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    return 0;
 
   case WM_DESTROY:
-   RemoveTrayIcon();
-   Save();
+   // Runtime remapping must stop first. After this point the process owns no input hooks.
    Unhook();
+   RemoveTrayIcon();
+   gConfigSaveFailed=!Save();
    if(gIconLarge) DestroyIcon(gIconLarge);
    if(gIconSmall) DestroyIcon(gIconSmall);
    gIconLarge=gIconSmall=nullptr;
@@ -1611,7 +1612,6 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    if(gBrushBg) DeleteObject(gBrushBg);
    if(gBrushSurface) DeleteObject(gBrushSurface);
    if(gBrushControl) DeleteObject(gBrushControl);
-   if(gInstanceMutex) { ReleaseMutex(gInstanceMutex); CloseHandle(gInstanceMutex); gInstanceMutex=nullptr; }
    gFontBody=gFontSmall=gFontTitle=gFontLabel=nullptr;
    gBrushBg=gBrushSurface=gBrushControl=nullptr;
    PostQuitMessage(0);
@@ -1974,6 +1974,12 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  else ShowWindow(gWnd,show);
  UpdateWindow(gWnd);
  MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
- return (int)msg.wParam;
+ int exitCode=(int)msg.wParam;
+ if(gInstanceMutex) {
+  ReleaseMutex(gInstanceMutex);
+  CloseHandle(gInstanceMutex);
+  gInstanceMutex=nullptr;
+ }
+ return exitCode;
 #endif
 }
