@@ -129,6 +129,7 @@ static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
 static int gCaptureSwallow=0;
 static unsigned gPhysicalMods=0;
 #ifdef KRM_TEST_BUILD
+static bool gSelfTestMode=true;
 static int gSelfCapturedCode=0;
 static unsigned gSelfCapturedMods=0;
 struct TestEvent { int vk; bool down; };
@@ -611,52 +612,6 @@ static void InstallStableComboWheel(HWND combo,ComboWheelState& state) {
  COMBOBOXINFO info{sizeof(info)};
  if(GetComboBoxInfo(combo,&info) && info.hwndList)
   SetWindowSubclass(info.hwndList,ComboWheelProc,2,reinterpret_cast<DWORD_PTR>(&state));
-}
-static bool ParseMappingsFile(const std::wstring& path,std::vector<Mapping>& out) {
- std::wifstream f(path);
- if(!f)return false;
- std::wstring line;
- while(std::getline(f,line)) {
-  if(line.empty())continue;
-  std::wistringstream in(line);
-  int src=0,dst=0,block=0; unsigned sm=0,dm=0;
-  if(!(in>>src>>dst>>block))continue;
-  in>>sm>>dm;
-  out.push_back({src,dst,block!=0,sm,dm});
- }
- return true;
-}
-static void Save() {
- const std::wstring path=ConfigPath();
- const std::wstring temp=ConfigTempPath();
- const std::wstring backup=ConfigBackupPath();
-
- {
-  std::wofstream f(temp,std::ios::trunc);
-  if(!f)return;
-  for(auto&m:gMaps) f<<m.source<<L' '<<m.target<<L' '<<(m.block?1:0)<<L' '<<m.srcMods<<L' '<<m.dstMods<<L'\n';
-  f.flush();
-  if(!f)return;
- }
-
- if(GetFileAttributesW(path.c_str())!=INVALID_FILE_ATTRIBUTES)
-  CopyFileW(path.c_str(),backup.c_str(),FALSE);
-
- if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
-  DeleteFileW(temp.c_str());
-}
-static void Load() {
- gMaps.clear();
- const std::wstring primary=ConfigPath();
- const std::wstring backup=ConfigBackupPath();
-
- if(ParseMappingsFile(primary,gMaps)) return;
-
- std::vector<Mapping> recovered;
- if(ParseMappingsFile(backup,recovered)) {
-  gMaps=std::move(recovered);
-  CopyFileW(backup.c_str(),primary.c_str(),FALSE);
- }
 }
 static Choice SelectedChoice(HWND h,const std::vector<Choice>& choices) {
  int i=ComboBox_GetCurSel(h);
