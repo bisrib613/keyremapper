@@ -125,15 +125,17 @@ static unsigned gTargetUiMods=0;
 struct ComboWheelState { HWND combo=nullptr; int delta=0; };
 static ComboWheelState gSourceWheel, gTargetWheel;
 static HHOOK gKeyboard, gMouse;
-static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false, gSelfTestMode=false;
+static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
 static int gCaptureSwallow=0;
 static unsigned gPhysicalMods=0;
+#ifdef KRM_TEST_BUILD
 static int gSelfCapturedCode=0;
 static unsigned gSelfCapturedMods=0;
 struct TestEvent { int vk; bool down; };
 static std::vector<TestEvent> gSelfOutputEvents;
 static bool gSelfObserveOutput=false;
 constexpr ULONG_PTR TEST_MAGIC = 0x4B525453;
+#endif
 static std::vector<Mapping> gMaps;
 struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; bool consumed=false; };
 static std::vector<ActiveEmission> gActive(0x1200);
@@ -216,6 +218,7 @@ static bool SendCode(int code,bool down) {
  }
  return true;
 }
+#ifdef KRM_TEST_BUILD
 static void SendTestKey(int vk,bool down) {
  INPUT in{};
  in.type=INPUT_KEYBOARD;
@@ -224,6 +227,7 @@ static void SendTestKey(int vk,bool down) {
  if(!down) in.ki.dwFlags|=KEYEVENTF_KEYUP;
  SendInput(1,&in,sizeof(in));
 }
+#endif
 static ActiveEmission BeginTarget(const Mapping& m) {
  ActiveEmission a{};
  a.consumed=true;
@@ -1271,7 +1275,9 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    int code=(int)w;
    bool src=(l&1)==0;
    unsigned mods=(unsigned)((ULONG_PTR)l>>1);
-   if(gSelfTestMode) { gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0; }
+#ifdef KRM_TEST_BUILD
+   gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0;
+#endif
    if(code==VK_ESCAPE){Refresh();return 0;}
    if(src) {
     SelectChoice(gSource,gSourceChoices,code,mods&KRM_SHIFT);
@@ -1335,6 +1341,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  }
  return DefWindowProcW(h,m,w,l);
 }
+#ifdef KRM_TEST_BUILD
 static LRESULT CALLBACK SelfTestWndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  if(m==WM_KR_CAPTURE) {
   gSelfCapturedCode=(int)w;
@@ -1536,9 +1543,12 @@ static int SelfTest() {
  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
  return 0;
 }
+#endif
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gInst=hi;
- if(wcsstr(cmd,L"--self-test"))return SelfTest();
+#ifdef KRM_TEST_BUILD
+ return SelfTest();
+#else
  gStartupMode=wcsstr(cmd,L"--startup")!=nullptr;
 
  gInstanceMutex=CreateMutexW(nullptr,TRUE,L"Local\\KeyRemapper.SingleInstance");
@@ -1576,4 +1586,5 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  UpdateWindow(gWnd);
  MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
  return (int)msg.wParam;
+#endif
 }
