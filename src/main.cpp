@@ -128,7 +128,6 @@ static unsigned gCaptureSuppressedMods=0;
 static unsigned gPhysicalMods=0;
 static bool gPhysicalKeyDown[256]{};
 #ifdef KRM_TEST_BUILD
-static bool gSelfTestMode=true;
 static int gSelfCapturedCode=0;
 static unsigned gSelfCapturedMods=0;
 struct TestEvent { int vk; bool down; };
@@ -1435,9 +1434,15 @@ static LRESULT CALLBACK SelfTestWndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  }
  return DefWindowProcW(h,m,w,l);
 }
+struct TestEnvironmentCleanup {
+ ~TestEnvironmentCleanup() {
+  CleanupTestStartup();
+  CleanupTestConfig();
+ }
+};
 static int SelfTest() {
- gSelfTestMode=true;
- WNDCLASSEXW wc{sizeof(wc)};
+ TestEnvironmentCleanup cleanup;
+  WNDCLASSEXW wc{sizeof(wc)};
  wc.hInstance=gInst; wc.lpfnWndProc=SelfTestWndProc; wc.lpszClassName=L"KRNativeSelfTest";
  RegisterClassExW(&wc);
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"",WS_OVERLAPPED,0,0,715,525,nullptr,nullptr,gInst,nullptr);
@@ -1450,7 +1455,7 @@ static int SelfTest() {
  bool hideOk=!IsWindowVisible(gWnd);
  ShowDashboard();
  bool showOk=IsWindowVisible(gWnd)!=FALSE;
- if(!(hideOk&&showOk)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 31; }
+ if(!(hideOk&&showOk)) { DestroyWindow(gWnd); gWnd=nullptr; return 31; }
 
  // Left/right modifier state must survive releasing only one side.
  ResetPhysicalModifierState();
@@ -1460,17 +1465,17 @@ static int SelfTest() {
  bool dualShiftOk=(gPhysicalMods&KRM_SHIFT)!=0;
  UpdatePhysicalModifierState(VK_RSHIFT,false);
  dualShiftOk=dualShiftOk && (gPhysicalMods&KRM_SHIFT)==0;
- if(!dualShiftOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 39; }
+ if(!dualShiftOk) { DestroyWindow(gWnd); gWnd=nullptr; return 39; }
 
  // Explicit owner-draw toggle state must survive without BM_GETCHECK.
  SetModChecks(KRM_SHIFT,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  bool modifierStateOk=(CheckedMods(gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin)&KRM_SHIFT)!=0;
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
- if(!modifierStateOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 32; }
+ if(!modifierStateOk) { DestroyWindow(gWnd); gWnd=nullptr; return 32; }
 
  // UI-selection test: resolve @ from the active keyboard layout, then Add/Update.
  Choice atChoice{};
- if(!ChoiceForSymbol(L'@',atChoice)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
+ if(!ChoiceForSymbol(L'@',atChoice)) { DestroyWindow(gWnd); gWnd=nullptr; return 24; }
  SelectChoice(gSource,gSourceChoices,VK_OEM_3,0);
  SelectChoice(gTarget,gTargetChoices,atChoice.code,atChoice.mods);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
@@ -1482,7 +1487,7 @@ static int SelfTest() {
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,listTarget,64);
  bool uiSelectionOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code &&
                      gMaps[0].dstMods==atChoice.mods && wcscmp(listTarget,L"@")==0);
- if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 24; }
+ if(!uiSelectionOk) { DestroyWindow(gWnd); gWnd=nullptr; return 24; }
 
  // Existing source mapping must be replaced by Add mapping, not silently rejected.
  gMaps.clear();
@@ -1498,14 +1503,14 @@ static int SelfTest() {
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,upsertTarget,64);
  bool upsertOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code &&
                 gMaps[0].dstMods==atChoice.mods && wcscmp(upsertTarget,L"@")==0);
- if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 28; }
+ if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; return 28; }
 
  // Persistence regression: reload, recover corrupt primary, and preserve last-known-good backup.
- if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
+ if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; return 29; }
  gMaps.clear();
- if(!Load()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
+ if(!Load()) { DestroyWindow(gWnd); gWnd=nullptr; return 29; }
  bool reloadOk=(gMaps.size()==1 && gMaps[0].target==atChoice.code && gMaps[0].dstMods==atChoice.mods);
- if(!reloadOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
+ if(!reloadOk) { DestroyWindow(gWnd); gWnd=nullptr; return 29; }
 
  CopyFileW(ConfigPath().c_str(),ConfigBackupPath().c_str(),FALSE);
  {
@@ -1516,7 +1521,7 @@ static int SelfTest() {
  bool recovered=Load();
  bool recoveryOk=recovered && gMaps.size()==1 && gMaps[0].target==atChoice.code &&
                  gMaps[0].dstMods==atChoice.mods;
- if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 30; }
+ if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; return 30; }
 
  // A corrupt primary must never overwrite a healthy backup during the next save.
  {
@@ -1525,12 +1530,12 @@ static int SelfTest() {
  }
  gMaps.clear();
  gMaps.push_back({'C','D',false,0,0});
- if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
+ if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; return 34; }
  std::vector<Mapping> backupMaps;
  bool backupPreserved=ReadMappingsFile(ConfigBackupPath(),backupMaps)==ConfigReadResult::Valid &&
                       backupMaps.size()==1 && backupMaps[0].target==atChoice.code &&
                       backupMaps[0].dstMods==atChoice.mods;
- if(!backupPreserved) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
+ if(!backupPreserved) { DestroyWindow(gWnd); gWnd=nullptr; return 34; }
 
  gMaps=backupMaps;
  WriteMappingsFile(ConfigPath(),gMaps);
@@ -1538,7 +1543,7 @@ static int SelfTest() {
 
  // Modify regression: select the row, load it, change target to #, then save.
  Choice hashChoice{};
- if(!ChoiceForSymbol(L'#',hashChoice)) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 25; }
+ if(!ChoiceForSymbol(L'#',hashChoice)) { DestroyWindow(gWnd); gWnd=nullptr; return 25; }
  ListView_SetItemState(gList,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
  ModifySelected();
  bool modifyLoaded=(gEditingIndex==0);
@@ -1549,7 +1554,7 @@ static int SelfTest() {
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,modifiedTarget,64);
  bool modifyOk=modifyLoaded && gMaps.size()==1 && gMaps[0].target==hashChoice.code &&
                gMaps[0].dstMods==hashChoice.mods && wcscmp(modifiedTarget,L"#")==0;
- if(!modifyOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 25; }
+ if(!modifyOk) { DestroyWindow(gWnd); gWnd=nullptr; return 25; }
 
  // Wheel regression: one 120 detent = one item; two 60 deltas = one item total.
  ComboBox_SetCurSel(gTarget,0); gTargetWheel.delta=0;
@@ -1562,7 +1567,7 @@ static int SelfTest() {
  SendMessageW(gTarget,WM_MOUSEWHEEL,MAKEWPARAM(0,(WORD)-60),0);
  bool wheelHalfSecond=(ComboBox_GetCurSel(gTarget)==1);
  if(!(wheelFull&&wheelHalfFirst&&wheelHalfSecond)) {
-  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 26;
+  DestroyWindow(gWnd); gWnd=nullptr; return 26;
  }
 
  // Startup regression: toggle HKCU Run and restore the original state.
@@ -1572,7 +1577,7 @@ static int SelfTest() {
  bool startupOff=SetStartupEnabled(false) && !StartupEnabled();
  bool startupRestore=SetStartupEnabled(startupInitial);
  if(!(startupOn&&startupCommandOk&&startupOff&&startupRestore)) {
-  DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 27;
+  DestroyWindow(gWnd); gWnd=nullptr; return 27;
  }
  gRunAtStartup=startupInitial; if(gStartup) InvalidateRect(gStartup,nullptr,TRUE);
 
@@ -1595,7 +1600,7 @@ static int SelfTest() {
  auto isShiftVk=[](int vk){return vk==VK_SHIFT||vk==VK_LSHIFT||vk==VK_RSHIFT;};
   bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&KRM_SHIFT)!=0);
  if(!captureOk) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 22;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 22;
  }
 
  // Modifier-only capture must complete on modifier release without leaking the key to Windows.
@@ -1610,7 +1615,7 @@ static int SelfTest() {
  }
  bool modifierCaptureOk=isShiftVk(gSelfCapturedCode) && gSelfCapturedMods==0;
  if(!modifierCaptureOk) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 35;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 35;
  }
 
  // Escape is a valid capturable key, not an implicit cancel key.
@@ -1624,7 +1629,7 @@ static int SelfTest() {
   Sleep(5);
  }
  if(gSelfCapturedCode!=VK_ESCAPE) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 36;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 36;
  }
 
  // Runtime emission test: A must produce Shift+2, not bare 2.
@@ -1651,7 +1656,7 @@ static int SelfTest() {
   }
  }
  if(!outputOk) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 23;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 23;
  }
 
  // Disabling remapping while a mapped key is held must release its synthetic output.
@@ -1683,7 +1688,7 @@ static int SelfTest() {
  }
  SetRemappingEnabled(true);
  if(!(releasedOk&&sawRelease)) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 33;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 33;
  }
 
  // A modifier key can be a source without requiring itself in srcMods.
@@ -1705,7 +1710,7 @@ static int SelfTest() {
   }
  }
  if(!modifierSourceOk) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 37;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 37;
  }
 
  // Releasing a key that was pressed while remapping was disabled must not synthesize a target.
@@ -1728,12 +1733,11 @@ static int SelfTest() {
  bool unexpectedTarget=false;
  for(const auto&e:gSelfOutputEvents) if(e.vk=='D') unexpectedTarget=true;
  if(unexpectedTarget) {
-  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 38;
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; return 38;
  }
 
  Unhook();
- DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false;
- return 0;
+ DestroyWindow(gWnd); gWnd=nullptr;  return 0;
 }
 #endif
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
