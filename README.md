@@ -8,6 +8,11 @@ The supplied reference installer is Inno Setup 5.5.7. Its main payload is a nati
 
 ## Current native build
 
+- Close button hides the dashboard to the system tray
+- Tray menu: Open, Enable Remapping, Preferences > Run at startup / Reset Defaults, Exit
+- Windows startup launches hidden to tray
+- Exit unloads hooks, removes the tray icon, and terminates the single process
+
 - Keyboard key to keyboard key
 - Keyboard key to mouse button or wheel action
 - Mouse button or wheel action to keyboard or mouse action
@@ -25,4 +30,4 @@ GitHub Actions builds `KeyRemapper_Setup.exe` with MSVC x86 and Inno Setup, then
 
 ## Current scope
 
-Version 1.1.0 is focused on validating the remapping core. It is not yet full feature parity with the reference application. Profiles, per-application rules, modifier combinations, double-press timing, folders, and tray behavior will be added after the core keyboard/mouse hook path is validated on real Windows hardware.
+Version 1.6.0 is focused on a stable native remapping core plus tray-first desktop behavior. It is not yet full feature parity with the reference application. Profiles, per-application rules, modifier combinations, double-press timing, folders, and tray behavior will be added after the core keyboard/mouse hook path is validated on real Windows hardware.
