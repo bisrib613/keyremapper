@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: keyremapper-${{ github.ref }}
+  group: keyremapper-stability-v170-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
