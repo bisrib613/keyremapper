@@ -347,13 +347,21 @@ static LRESULT CALLBACK MouseHook(int n,WPARAM w,LPARAM l) {
   case WM_XBUTTONUP:c=HIWORD(m->mouseData)==XBUTTON1?MOUSE_X1:MOUSE_X2;break;
   case WM_MOUSEWHEEL:c=(short)HIWORD(m->mouseData)>0?WHEEL_UP:WHEEL_DOWN;d=true;p=true;break;
  }
- if(c&&Handle(c,d,p))return 1;
+ if(c&&Handle(c,d,p,gPhysicalMods))return 1;
  return CallNextHookEx(gMouse,n,w,l);
 }
 static bool InstallHooks() {
- gKeyboard=SetWindowsHookExW(WH_KEYBOARD_LL,KeyHook,gInst,0);
- gMouse=SetWindowsHookExW(WH_MOUSE_LL,MouseHook,gInst,0);
- return gKeyboard&&gMouse;
+ if(gKeyboard||gMouse) return gKeyboard&&gMouse;
+ HHOOK keyboard=SetWindowsHookExW(WH_KEYBOARD_LL,KeyHook,gInst,0);
+ if(!keyboard) return false;
+ HHOOK mouse=SetWindowsHookExW(WH_MOUSE_LL,MouseHook,gInst,0);
+ if(!mouse) {
+  UnhookWindowsHookEx(keyboard);
+  return false;
+ }
+ gKeyboard=keyboard;
+ gMouse=mouse;
+ return true;
 }
 static void ReleaseActiveOutputs() {
  for(size_t i=0;i<gActive.size();++i) {
@@ -363,6 +371,7 @@ static void ReleaseActiveOutputs() {
 }
 static void SetRemappingEnabled(bool enabled) {
  if(!enabled) ReleaseActiveOutputs();
+ else gLastInjectionError=ERROR_SUCCESS;
  gPaused=!enabled;
 }
 static void Unhook() {
@@ -638,6 +647,8 @@ static void Refresh() {
  const wchar_t* unit=count==1?L"mapping":L"mappings";
  if(!gKeyboard || !gMouse)
   wsprintfW(st,L"Input hooks unavailable  |  %u %s",count,unit);
+ else if(gLastInjectionError!=ERROR_SUCCESS)
+  wsprintfW(st,L"Input injection failed (%lu)  |  %u %s",gLastInjectionError,count,unit);
  else if(gPaused)
   wsprintfW(st,L"Paused  |  %u %s",count,unit);
  else
