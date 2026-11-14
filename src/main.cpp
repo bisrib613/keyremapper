@@ -1075,7 +1075,7 @@ static void ResetDefaults() {
  gTargetUiMods=0;
  SetBlockSourceState(false);
  SetRemappingEnabled(true);
- ApplyRunAtStartup(false);
+ bool startupResetOk=ApplyRunAtStartup(false);
  SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
  SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
  gConfigSaveFailed=!Save();
@@ -1083,6 +1083,9 @@ static void ResetDefaults() {
  Refresh();
  UpdateTrayIconState();
  InvalidateRect(gWnd,nullptr,TRUE);
+ if(!startupResetOk)
+  MessageBoxW(gWnd,L"Mappings were reset, but Run at startup could not be disabled.",
+              L"Reset Defaults",MB_ICONWARNING|MB_OK);
 }
 static void ExitApplication() {
  if(!gWnd) return;
@@ -1103,8 +1106,13 @@ static void ExecuteTrayCommand(UINT command) {
    break;
   case ID_TRAY_STARTUP: {
    bool next=!gRunAtStartup;
-   if(!ApplyRunAtStartup(next) && gStatus)
-    SetWindowTextW(gStatus,L"Could not update Run at startup");
+   if(!ApplyRunAtStartup(next)) {
+    ShowDashboard();
+    if(gStatus) {
+     SetWindowTextW(gStatus,L"Could not update Run at startup");
+     RedrawWindow(gStatus,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW);
+    }
+   }
    break;
   }
   case ID_TRAY_RESET:
