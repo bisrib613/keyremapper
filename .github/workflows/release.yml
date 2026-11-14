@@ -46,7 +46,9 @@ jobs:
           if not exist build mkdir build
           rc /nologo /fo build\resource.res src\resource.rc
           cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /WX /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /WX /wd4100 /wd4505 /DKRM_TEST_BUILD /DUNICODE /D_UNICODE /Fe:build\KeyRemapperTests.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
+          if errorlevel 1 exit /b 1
 
       - name: Run isolated regression suite
         shell: pwsh
