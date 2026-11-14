@@ -43,7 +43,8 @@ jobs:
         run: |
           $p = Start-Process -FilePath ".\build\KeyRemapperTests.exe" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Regression suite failed with exit code $($p.ExitCode)" }
-          if ((Get-Content ".\build\KeyRemapper.exe" -Raw -Encoding Byte | ForEach-Object {[char]$_}) -join '' -match '--self-test') {
+          $productionText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes(".\build\KeyRemapper.exe"))
+          if ($productionText.Contains("--self-test")) {
             throw "Production binary unexpectedly contains the self-test switch"
           }
 
