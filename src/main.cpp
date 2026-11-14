@@ -1123,6 +1123,12 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_CTLCOLORSTATIC: {
    HDC dc=(HDC)w; HWND control=(HWND)l;
    int id=GetDlgCtrlID(control);
+   if(id==ID_STATUS) {
+    SetBkMode(dc,OPAQUE);
+    SetBkColor(dc,C_BG);
+    SetTextColor(dc,C_MUTED);
+    return (LRESULT)gBrushBg;
+   }
    SetBkMode(dc,TRANSPARENT);
    if(id==ID_TITLE || id==ID_SECTION) SetTextColor(dc,C_TEXT);
    else SetTextColor(dc,C_MUTED);
@@ -1206,8 +1212,9 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
       bool next=!gRunAtStartup;
       if(!ApplyRunAtStartup(next)) {
        SetWindowTextW(gStatus,L"Could not update Run at startup");
+       RedrawWindow(gStatus,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW);
       } else {
-       SetWindowTextW(gStatus,next?L"Run at startup enabled":L"Run at startup disabled");
+       Refresh();
       }
      }
      break;
