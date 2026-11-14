@@ -1425,15 +1425,20 @@ static int SelfTest() {
  return outputOk?0:23;
 }
 int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
- gInst=hi;if(wcsstr(cmd,L"--self-test"))return SelfTest();
+ gInst=hi;
+ if(wcsstr(cmd,L"--self-test"))return SelfTest();
+ gStartupMode=wcsstr(cmd,L"--startup")!=nullptr;
 
  gInstanceMutex=CreateMutexW(nullptr,TRUE,L"Local\\KeyRemapper.SingleInstance");
  if(!gInstanceMutex) return 3;
  if(GetLastError()==ERROR_ALREADY_EXISTS) {
-  HWND existing=FindWindowW(L"KRNative",nullptr);
-  if(existing) {
-   if(IsIconic(existing)) ShowWindow(existing,SW_RESTORE);
-   SetForegroundWindow(existing);
+  if(!gStartupMode) {
+   HWND existing=FindWindowW(L"KRNative",nullptr);
+   if(existing) {
+    ShowWindow(existing,SW_SHOW);
+    if(IsIconic(existing)) ShowWindow(existing,SW_RESTORE);
+    SetForegroundWindow(existing);
+   }
   }
   CloseHandle(gInstanceMutex);gInstanceMutex=nullptr;
   return 0;
@@ -1454,7 +1459,9 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
   CW_USEDEFAULT,CW_USEDEFAULT,840,600,nullptr,nullptr,hi,nullptr);
  if(!gWnd)return 2;
- ShowWindow(gWnd,show);UpdateWindow(gWnd);
+ if(gStartupMode) ShowWindow(gWnd,SW_HIDE);
+ else ShowWindow(gWnd,show);
+ UpdateWindow(gWnd);
  MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
  return (int)msg.wParam;
 }
