@@ -2,7 +2,7 @@
 
 Key Remapper is a native Win32 x86 keyboard/mouse remapper. It is intentionally small, per-user, and does not bundle .NET, a service, a driver, or a helper process.
 
-## Current build — v1.7.0
+## Current build — v1.7.1
 
 Runtime behavior:
 - Closing the dashboard hides it to the system tray.
@@ -25,6 +25,7 @@ Remapping:
 - Input injection failures are surfaced in the runtime status.
 
 Persistence:
+- Legacy migration now closes its probe handle before atomic replacement on Windows, preventing false "recovery failed" status after upgrading from v1.6.x.
 - Mappings live in `%APPDATA%\KeyRemapperClean\mappings.txt`.
 - v1.7 uses a validated versioned config format and migrates legacy v1.x mapping files automatically.
 - Writes are temp-file + replace, with a validated last-known-good backup in `mappings.bak`.
