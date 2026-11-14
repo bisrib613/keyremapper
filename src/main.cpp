@@ -127,6 +127,8 @@ static ComboWheelState gSourceWheel, gTargetWheel;
 static HHOOK gKeyboard, gMouse;
 static bool gPaused=false, gCaptureSource=false, gCaptureTarget=false;
 static int gCaptureSwallow=0;
+static int gCaptureModifierCandidate=0;
+static unsigned gCaptureSuppressedMods=0;
 static unsigned gPhysicalMods=0;
 #ifdef KRM_TEST_BUILD
 static bool gSelfTestMode=true;
@@ -267,13 +269,38 @@ static Mapping* FindMap(int src,unsigned sourceMods) {
 static bool Handle(int src,bool down,bool pulse=false,unsigned sourceMods=0) {
  unsigned modBit=ModBitForVk(src);
  if(gCaptureSource||gCaptureTarget) {
-  if(modBit) return true;
+  if(modBit) {
+   if(down) {
+    gCaptureModifierCandidate=src;
+    gCaptureSuppressedMods|=modBit;
+    return true;
+   }
+   if(gCaptureModifierCandidate==src) {
+    bool sourceCapture=gCaptureSource;
+    gCaptureSource=gCaptureTarget=false;
+    gCaptureModifierCandidate=0;
+    gCaptureSuppressedMods&=~modBit;
+    unsigned mods=sourceMods&~modBit;
+    LPARAM packed=(LPARAM)((mods<<1)|(sourceCapture?0:1));
+    PostMessageW(gWnd,WM_KR_CAPTURE,src,packed);
+    return true;
+   }
+   return true;
+  }
   if(down||pulse) {
-   bool sourceCapture=gCaptureSource; gCaptureSource=gCaptureTarget=false; gCaptureSwallow=pulse?0:src;
+   bool sourceCapture=gCaptureSource;
+   gCaptureSource=gCaptureTarget=false;
+   gCaptureModifierCandidate=0;
+   gCaptureSwallow=pulse?0:src;
    LPARAM packed=(LPARAM)((sourceMods<<1)|(sourceCapture?0:1));
-   PostMessageW(gWnd,WM_KR_CAPTURE,src,packed); return true;
+   PostMessageW(gWnd,WM_KR_CAPTURE,src,packed);
+   return true;
   }
   return false;
+ }
+ if(modBit && (gCaptureSuppressedMods&modBit)) {
+  if(!down) gCaptureSuppressedMods&=~modBit;
+  return true;
  }
  if(gCaptureSwallow==src) { if(!down)gCaptureSwallow=0; return true; }
 
@@ -1377,7 +1404,6 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
 #ifdef KRM_TEST_BUILD
    gSelfCapturedCode=code; gSelfCapturedMods=mods; return 0;
 #endif
-   if(code==VK_ESCAPE){Refresh();return 0;}
    if(src) {
     SelectChoice(gSource,gSourceChoices,code,mods&KRM_SHIFT);
     SetModChecks(mods & ~ComboImpliedMods(gSource,gSourceChoices),gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
