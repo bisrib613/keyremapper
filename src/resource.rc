@@ -5,8 +5,8 @@
 1 RT_MANIFEST "app.manifest"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,5,2,0
- PRODUCTVERSION 1,5,2,0
+ FILEVERSION 1,6,0,0
+ PRODUCTVERSION 1,6,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS VS_FF_DEBUG
@@ -23,12 +23,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "bisrib613\0"
       VALUE "FileDescription", "Key Remapper - native Windows input remapper\0"
-      VALUE "FileVersion", "1.5.2.0\0"
+      VALUE "FileVersion", "1.6.0.0\0"
       VALUE "InternalName", "KeyRemapper\0"
       VALUE "LegalCopyright", "Copyright (c) 2026 bisrib613\0"
       VALUE "OriginalFilename", "KeyRemapper.exe\0"
       VALUE "ProductName", "Key Remapper\0"
-      VALUE "ProductVersion", "1.5.2.0\0"
+      VALUE "ProductVersion", "1.6.0.0\0"
     END
   END
   BLOCK "VarFileInfo"
