@@ -77,6 +77,33 @@ static int SelfTest() {
                 gMaps[0].dstMods==atChoice.mods && wcscmp(upsertTarget,L"@")==0);
  if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; return 28; }
 
+ // Legacy migration regression: v1.6-style config must be rewritten after its probe handle is closed.
+ Mapping legacyExpected=gMaps[0];
+ DeleteFileW(ConfigBackupPath().c_str());
+ DeleteFileW(ConfigTempPath().c_str());
+ {
+  std::wofstream legacy(ConfigPath(),std::ios::trunc);
+  legacy<<legacyExpected.source<<L' '<<legacyExpected.target<<L' '<<(legacyExpected.block?1:0)
+        <<L' '<<legacyExpected.srcMods<<L' '<<legacyExpected.dstMods<<L'\n';
+ }
+ gMaps.clear();
+ gConfigLoadStatus=ConfigLoadStatus::Ready;
+ bool migrationLoaded=Load();
+ std::wstring migratedHeader;
+ {
+  std::wifstream migrated(ConfigPath());
+  std::getline(migrated,migratedHeader);
+ }
+ bool migrationOk=migrationLoaded &&
+                  gConfigLoadStatus==ConfigLoadStatus::Migrated &&
+                  gMaps.size()==1 &&
+                  gMaps[0].source==legacyExpected.source &&
+                  gMaps[0].target==legacyExpected.target &&
+                  gMaps[0].srcMods==legacyExpected.srcMods &&
+                  gMaps[0].dstMods==legacyExpected.dstMods &&
+                  migratedHeader==L"KRM_CONFIG 2";
+ if(!migrationOk) { DestroyWindow(gWnd); gWnd=nullptr; return 40; }
+
  // Persistence regression: reload, recover corrupt primary, and preserve last-known-good backup.
  if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; return 29; }
  gMaps.clear();
