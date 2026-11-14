@@ -148,6 +148,7 @@ static std::vector<ActiveEmission> gActive(0x1200);
 static DWORD gLastInjectionError=ERROR_SUCCESS;
 static bool gConfigLoadFailed=false;
 static bool gConfigSaveFailed=false;
+static int S(int value) { return MulDiv(value,(int)gDpi,96); }
 
 static std::wstring NameOf(int code) {
  for (auto &i:ITEMS) if(i.code==code) return i.name;
@@ -681,7 +682,7 @@ static void FillCombo(HWND h,std::vector<Choice>& choices) {
   choices.push_back({i.code,KRM_SHIFT});
  }
 }
-static unsigned CheckedMods(HWND sh,HWND ctrl,HWND alt,HWND win) {
+static unsigned CheckedMods(HWND sh,HWND,HWND,HWND) {
  if(sh==gSrcShift) return gSourceUiMods;
  if(sh==gDstShift) return gTargetUiMods;
  return 0;
@@ -957,8 +958,6 @@ static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
  DrawTextW(d->hDC,buf,-1,&r,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
  SelectObject(d->hDC,old);
 }
-
-static int S(int value) { return MulDiv(value,(int)gDpi,96); }
 
 static void ApplyAllFonts() {
  ApplyFont(gTitle,gFontTitle);
