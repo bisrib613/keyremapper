@@ -139,7 +139,7 @@ static std::vector<Mapping> gMaps;
 struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; bool consumed=false; };
 static std::vector<ActiveEmission> gActive(0x1200);
 static DWORD gLastInjectionError=ERROR_SUCCESS;
-static bool gConfigLoadFailed=false;
+static ConfigLoadStatus gConfigLoadStatus=ConfigLoadStatus::Ready;
 static bool gConfigSaveFailed=false;
 static int S(int value) { return MulDiv(value,(int)gDpi,96); }
 
@@ -452,7 +452,7 @@ static void Unhook() {
  ResetPhysicalModifierState();
 }
 static bool Save() { return SaveMappings(gMaps); }
-static bool Load() { return LoadMappings(gMaps); }
+static bool Load() { return LoadMappings(gMaps,&gConfigLoadStatus); }
 
 static LRESULT CALLBACK ComboWheelProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam,UINT_PTR,DWORD_PTR refData) {
  auto* state=reinterpret_cast<ComboWheelState*>(refData);
@@ -628,8 +628,12 @@ static void Refresh() {
  wchar_t st[160]{};
  unsigned count=(unsigned)gMaps.size();
  const wchar_t* unit=count==1?L"mapping":L"mappings";
- if(gConfigLoadFailed)
-  wsprintfW(st,L"Configuration recovery failed  |  %u %s",count,unit);
+ if(gConfigLoadStatus==ConfigLoadStatus::MigrationWriteFailed)
+  wsprintfW(st,L"Mappings loaded; migration save failed  |  %u %s",count,unit);
+ else if(gConfigLoadStatus==ConfigLoadStatus::RecoveryWriteFailed)
+  wsprintfW(st,L"Mappings recovered; config repair failed  |  %u %s",count,unit);
+ else if(gConfigLoadStatus==ConfigLoadStatus::Invalid)
+  wsprintfW(st,L"Configuration invalid; no valid backup  |  %u %s",count,unit);
  else if(gConfigSaveFailed)
   wsprintfW(st,L"Could not save mappings  |  %u %s",count,unit);
  else if(!gKeyboard || !gMouse)
@@ -1462,7 +1466,7 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  gDpi=GetDpiForSystem();
  INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);
- gConfigLoadFailed=!Load();
+ Load();
 
  gIconLarge=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,32,32,LR_DEFAULTCOLOR);
  gIconSmall=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,16,16,LR_DEFAULTCOLOR);
