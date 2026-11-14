@@ -119,6 +119,7 @@ static bool gExitRequested=false;
 static bool gStartupMode=false;
 static bool gRunAtStartup=false;
 static bool gBlockSource=false;
+static UINT gTaskbarCreatedMessage=0;
 static unsigned gSourceUiMods=0;
 static unsigned gTargetUiMods=0;
 
@@ -1236,6 +1237,11 @@ static void ShowTrayMenu() {
  if(cmd) ExecuteTrayCommand(cmd);
 }
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ if(gTaskbarCreatedMessage && m==gTaskbarCreatedMessage) {
+  gTrayAdded=false;
+  AddTrayIcon(h);
+  return 0;
+ }
  switch(m) {
   case WM_CREATE:
    CreateUi(h);
@@ -1440,8 +1446,13 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    return 0;
 
   case WM_CLOSE:
-   if(gExitRequested) DestroyWindow(h);
-   else HideDashboard();
+   if(gExitRequested) {
+    DestroyWindow(h);
+   } else if(gTrayAdded) {
+    HideDashboard();
+   } else {
+    ShowWindow(h,SW_MINIMIZE);
+   }
    return 0;
 
   case WM_DESTROY:
@@ -1675,6 +1686,7 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  return SelfTest();
 #else
  gStartupMode=wcsstr(cmd,L"--startup")!=nullptr;
+ gTaskbarCreatedMessage=RegisterWindowMessageW(L"TaskbarCreated");
 
  gInstanceMutex=CreateMutexW(nullptr,TRUE,L"Local\\KeyRemapper.SingleInstance");
  if(!gInstanceMutex) return 3;
@@ -1706,7 +1718,7 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
   CW_USEDEFAULT,CW_USEDEFAULT,840,600,nullptr,nullptr,hi,nullptr);
  if(!gWnd)return 2;
- if(gStartupMode) ShowWindow(gWnd,SW_HIDE);
+ if(gStartupMode && gTrayAdded) ShowWindow(gWnd,SW_HIDE);
  else ShowWindow(gWnd,show);
  UpdateWindow(gWnd);
  MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
