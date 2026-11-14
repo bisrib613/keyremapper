@@ -350,13 +350,22 @@ static std::wstring ConfigTempPath() { return ConfigDir()+L"\\mappings.tmp"; }
 static const wchar_t* STARTUP_RUN_KEY=L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 static const wchar_t* STARTUP_VALUE=L"KeyRemapper";
 
-static bool StartupEnabled() {
+static std::wstring StartupCommandValue() {
  HKEY key=nullptr;
- if(RegOpenKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,KEY_QUERY_VALUE,&key)!=ERROR_SUCCESS) return false;
+ if(RegOpenKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,KEY_QUERY_VALUE,&key)!=ERROR_SUCCESS) return L"";
  DWORD type=0,size=0;
- LONG result=RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,nullptr,&size);
+ if(RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,nullptr,&size)!=ERROR_SUCCESS || type!=REG_SZ || size<sizeof(wchar_t)) {
+  RegCloseKey(key); return L"";
+ }
+ std::vector<wchar_t> buf(size/sizeof(wchar_t)+1,0);
+ if(RegQueryValueExW(key,STARTUP_VALUE,nullptr,&type,reinterpret_cast<BYTE*>(buf.data()),&size)!=ERROR_SUCCESS) {
+  RegCloseKey(key); return L"";
+ }
  RegCloseKey(key);
- return result==ERROR_SUCCESS && type==REG_SZ && size>sizeof(wchar_t);
+ return std::wstring(buf.data());
+}
+static bool StartupEnabled() {
+ return !StartupCommandValue().empty();
 }
 static bool SetStartupEnabled(bool enabled) {
  HKEY key=nullptr;
