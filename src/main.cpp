@@ -1144,7 +1144,7 @@ static void AddMap() {
    selectIndex=(int)gMaps.size()-1;
   }
  }
- Save();
+ gConfigSaveFailed=!Save();
  ResetEditorState();
  Refresh();
  if(selectIndex>=0 && selectIndex<ListView_GetItemCount(gList)) {
@@ -1160,7 +1160,7 @@ static void RemoveMap() {
  }
  gMaps.erase(gMaps.begin()+index);
  ResetEditorState();
- Save();
+ gConfigSaveFailed=!Save();
  Refresh();
 }
 
@@ -1217,7 +1217,7 @@ static bool ApplyRunAtStartup(bool enabled) {
 
 static void ResetDefaults() {
  int answer=MessageBoxW(gWnd,
-  L"Clear all mappings and restore remapping defaults?\n\nRun at startup will not be changed.",
+  L"Reset mappings and preferences to defaults?\n\nThis clears all mappings, enables remapping, and disables Run at startup.",
   L"Reset Defaults",MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2);
  if(answer!=IDYES) return;
 
@@ -1227,14 +1227,15 @@ static void ResetDefaults() {
  gTargetUiMods=0;
  SetBlockSourceState(false);
  SetRemappingEnabled(true);
+ ApplyRunAtStartup(false);
  SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
  SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
- Save();
+ gConfigSaveFailed=!Save();
  ResetEditorState();
  Refresh();
+ UpdateTrayIconState();
  InvalidateRect(gWnd,nullptr,TRUE);
 }
-
 static void ExitApplication() {
  if(!gWnd) return;
  gExitRequested=true;
@@ -1785,7 +1786,10 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
   return 0;
  }
 
- INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);SetProcessDPIAware();Load();
+ SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+ gDpi=GetDpiForSystem();
+ INITCOMMONCONTROLSEX ic{sizeof(ic),ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&ic);
+ gConfigLoadFailed=!Load();
 
  gIconLarge=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,32,32,LR_DEFAULTCOLOR);
  gIconSmall=(HICON)LoadImageW(hi,MAKEINTRESOURCEW(101),IMAGE_ICON,16,16,LR_DEFAULTCOLOR);
@@ -1798,7 +1802,7 @@ int WINAPI wWinMain(HINSTANCE hi,HINSTANCE,PWSTR cmd,int show) {
  RegisterClassExW(&wc);
 
  gWnd=CreateWindowExW(0,wc.lpszClassName,L"Key Remapper",WS_OVERLAPPEDWINDOW,
-  CW_USEDEFAULT,CW_USEDEFAULT,840,600,nullptr,nullptr,hi,nullptr);
+  CW_USEDEFAULT,CW_USEDEFAULT,S(840),S(600),nullptr,nullptr,hi,nullptr);
  if(!gWnd)return 2;
  if(gStartupMode && gTrayAdded) ShowWindow(gWnd,SW_HIDE);
  else ShowWindow(gWnd,show);
