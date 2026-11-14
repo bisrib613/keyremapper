@@ -21,6 +21,14 @@
 
 constexpr ULONG_PTR KR_MAGIC = 0x4B524D50;
 constexpr UINT WM_KR_CAPTURE = WM_APP + 1;
+constexpr UINT WM_KR_TRAY = WM_APP + 2;
+constexpr UINT TRAY_ID = 1;
+constexpr UINT ID_TRAY_OPEN = 5001;
+constexpr UINT ID_TRAY_ENABLE = 5002;
+constexpr UINT ID_TRAY_PREFS = 5003;
+constexpr UINT ID_TRAY_STARTUP = 5004;
+constexpr UINT ID_TRAY_RESET = 5005;
+constexpr UINT ID_TRAY_EXIT = 5006;
 constexpr int MOUSE_LEFT = 0x1001;
 constexpr int MOUSE_RIGHT = 0x1002;
 constexpr int MOUSE_MIDDLE = 0x1003;
@@ -105,6 +113,14 @@ static HBRUSH gBrushBg=nullptr, gBrushSurface=nullptr, gBrushControl=nullptr;
 static HFONT gFontBody=nullptr, gFontSmall=nullptr, gFontTitle=nullptr, gFontLabel=nullptr;
 static HICON gIconLarge=nullptr, gIconSmall=nullptr;
 static HANDLE gInstanceMutex=nullptr;
+static NOTIFYICONDATAW gTray{};
+static bool gTrayAdded=false;
+static bool gExitRequested=false;
+static bool gStartupMode=false;
+static bool gRunAtStartup=false;
+static bool gBlockSource=false;
+static unsigned gSourceUiMods=0;
+static unsigned gTargetUiMods=0;
 
 struct ComboWheelState { HWND combo=nullptr; int delta=0; };
 static ComboWheelState gSourceWheel, gTargetWheel;
