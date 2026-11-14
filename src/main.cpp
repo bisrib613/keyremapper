@@ -650,7 +650,9 @@ static void DrawRoundedRect(HDC dc,const RECT& r,COLORREF fill,COLORREF border,i
 
 static void DrawToggleChip(const DRAWITEMSTRUCT* d) {
  RECT r=d->rcItem;
- bool checked=Button_GetCheck(d->hwndItem)==BST_CHECKED;
+ unsigned bit=ModifierBitForControlId((int)d->CtlID);
+ bool source=(d->CtlID>=ID_SRC_SHIFT && d->CtlID<=ID_SRC_WIN);
+ bool checked=source?((gSourceUiMods&bit)!=0):((gTargetUiMods&bit)!=0);
  bool pressed=(d->itemState&ODS_SELECTED)!=0;
  bool disabled=(d->itemState&ODS_DISABLED)!=0;
 
@@ -676,7 +678,7 @@ static void DrawToggleChip(const DRAWITEMSTRUCT* d) {
 
 static void DrawSwitchControl(const DRAWITEMSTRUCT* d) {
  RECT r=d->rcItem;
- bool checked=Button_GetCheck(d->hwndItem)==BST_CHECKED;
+ bool checked=(d->CtlID==ID_BLOCK)?gBlockSource:gRunAtStartup;
  bool disabled=(d->itemState&ODS_DISABLED)!=0;
  int trackW=34,trackH=18;
  RECT track{r.left,r.top+(r.bottom-r.top-trackH)/2,r.left+trackW,r.top+(r.bottom-r.top+trackH)/2};
@@ -837,7 +839,7 @@ static void CreateUi(HWND h) {
  col.pszText=(LPWSTR)L"Target";col.cx=390;ListView_InsertColumn(gList,1,&col);
 
  gEmpty=Make(h,L"STATIC",L"No mappings yet. Add one above.",SS_CENTER,210,382,380,28,ID_EMPTY);
- gStartup=Make(h,L"BUTTON",L"Start with Windows",BS_OWNERDRAW,20,524,156,28,ID_STARTUP);
+ gStartup=Make(h,L"BUTTON",L"Run at startup",BS_OWNERDRAW,20,524,156,28,ID_STARTUP);
  gStatus=Make(h,L"STATIC",L"",SS_LEFT,198,528,420,20,ID_STATUS);
  gPause=Make(h,L"BUTTON",L"Pause",BS_OWNERDRAW,714,522,86,32,ID_PAUSE);
 
@@ -863,7 +865,8 @@ static void CreateUi(HWND h) {
  SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
  InstallStableComboWheel(gSource,gSourceWheel);
  InstallStableComboWheel(gTarget,gTargetWheel);
- Button_SetCheck(gStartup,StartupEnabled()?BST_CHECKED:BST_UNCHECKED);
+ gRunAtStartup=StartupEnabled();
+ InvalidateRect(gStartup,nullptr,TRUE);
 
  RECT rc{};GetClientRect(h,&rc);LayoutUi(rc.right,rc.bottom);
  Refresh();
