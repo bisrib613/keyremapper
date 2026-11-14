@@ -780,7 +780,11 @@ static void Refresh() {
  wchar_t st[160]{};
  unsigned count=(unsigned)gMaps.size();
  const wchar_t* unit=count==1?L"mapping":L"mappings";
- if(!gKeyboard || !gMouse)
+ if(gConfigLoadFailed)
+  wsprintfW(st,L"Configuration recovery failed  |  %u %s",count,unit);
+ else if(gConfigSaveFailed)
+  wsprintfW(st,L"Could not save mappings  |  %u %s",count,unit);
+ else if(!gKeyboard || !gMouse)
   wsprintfW(st,L"Input hooks unavailable  |  %u %s",count,unit);
  else if(gLastInjectionError!=ERROR_SUCCESS)
   wsprintfW(st,L"Input injection failed (%lu)  |  %u %s",gLastInjectionError,count,unit);
