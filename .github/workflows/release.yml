@@ -113,8 +113,14 @@ jobs:
           git push origin "$tag"
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, tag_release_commit]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (
+        (github.ref == 'refs/heads/main' && needs.tag_release_commit.result == 'success') ||
+        startsWith(github.ref, 'refs/tags/v')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -123,12 +129,22 @@ jobs:
         with:
           name: KeyRemapper-Native-Setup
           path: dist
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: VERSION
+          sparse-checkout-cone-mode: false
       - name: Create immutable release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" "dist/KeyRemapper_Setup.exe" \
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+          else
+            version="$(tr -d '\r\n' < VERSION)"
+            tag="v${version}"
+          fi
+          gh release create "$tag" "dist/KeyRemapper_Setup.exe" \
             --repo "${{ github.repository }}" \
-            --title "Key Remapper ${{ github.ref_name }}" \
-            --notes "Native Win32 stability release. Built and tested from the exact tagged commit."
+            --title "Key Remapper $tag" \
+            --notes "Native Win32 stability release. The version tag and installer were produced from the same tested commit."
