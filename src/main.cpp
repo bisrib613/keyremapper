@@ -1296,7 +1296,7 @@ static int SelfTest() {
  SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
- Button_SetCheck(gBlock,BST_UNCHECKED);
+ SetBlockSourceState(false);
  gMaps.clear();
  AddMap();
  wchar_t listTarget[64]{};
@@ -1313,7 +1313,7 @@ static int SelfTest() {
  SelectChoice(gTarget,gTargetChoices,'2',KRM_SHIFT);
  SetModChecks(0,gSrcShift,gSrcCtrl,gSrcAlt,gSrcWin);
  SetModChecks(0,gDstShift,gDstCtrl,gDstAlt,gDstWin);
- Button_SetCheck(gBlock,BST_UNCHECKED);
+ SetBlockSourceState(false);
  AddMap();
  wchar_t upsertTarget[64]{};
  if(ListView_GetItemCount(gList)>0) ListView_GetItemText(gList,0,1,upsertTarget,64);
@@ -1373,7 +1373,7 @@ static int SelfTest() {
  if(!(startupOn&&startupOff&&startupRestore)) {
   DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 27;
  }
- Button_SetCheck(gStartup,startupInitial?BST_CHECKED:BST_UNCHECKED);
+ gRunAtStartup=startupInitial; if(gStartup) InvalidateRect(gStartup,nullptr,TRUE);
 
  if(!InstallHooks()) { DestroyWindow(gWnd); return 21; }
 
