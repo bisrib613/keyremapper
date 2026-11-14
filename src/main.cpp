@@ -258,6 +258,8 @@ static ActiveEmission BeginTarget(const Mapping& m) {
   for(unsigned bit:{KRM_WIN,KRM_ALT,KRM_CTRL,KRM_SHIFT})
    if((a.suppressed&bit)&&(gPhysicalMods&bit)) SendCode(VkForMod(bit),true);
   a.target=0;
+  a.synthetic=0;
+  a.suppressed=0;
  }
  return a;
 }
@@ -569,8 +571,12 @@ static bool Save() {
  if(!WriteMappingsFile(temp,gMaps)) return false;
 
  std::vector<Mapping> existing;
- if(ReadMappingsFile(path,existing)==ConfigReadResult::Valid)
-  CopyFileW(path.c_str(),backup.c_str(),FALSE);
+ if(ReadMappingsFile(path,existing)==ConfigReadResult::Valid) {
+  if(!CopyFileW(path.c_str(),backup.c_str(),FALSE)) {
+   DeleteFileW(temp.c_str());
+   return false;
+  }
+ }
 
  if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
   DeleteFileW(temp.c_str());
@@ -580,8 +586,9 @@ static bool Save() {
  std::vector<Mapping> verify;
  if(ReadMappingsFile(path,verify)!=ConfigReadResult::Valid) return false;
 
- if(GetFileAttributesW(backup.c_str())==INVALID_FILE_ATTRIBUTES)
-  CopyFileW(path.c_str(),backup.c_str(),FALSE);
+ if(GetFileAttributesW(backup.c_str())==INVALID_FILE_ATTRIBUTES) {
+  if(!CopyFileW(path.c_str(),backup.c_str(),FALSE)) return false;
+ }
  return true;
 }
 
@@ -604,7 +611,7 @@ static bool Load() {
  std::vector<Mapping> recovered;
  if(ReadMappingsFile(backup,recovered)==ConfigReadResult::Valid) {
   gMaps=std::move(recovered);
-  WriteMappingsFile(primary,gMaps);
+  if(!WriteMappingsFile(primary,gMaps)) return false;
   return true;
  }
  return primaryResult==ConfigReadResult::Missing;
@@ -1302,7 +1309,7 @@ static void ShowTrayMenu() {
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  if(gTaskbarCreatedMessage && m==gTaskbarCreatedMessage) {
   gTrayAdded=false;
-  AddTrayIcon(h);
+  if(!AddTrayIcon(h) && !IsWindowVisible(h)) ShowWindow(h,SW_SHOWMINIMIZED);
   return 0;
  }
  switch(m) {
@@ -1739,7 +1746,7 @@ static int SelfTest() {
  SendTestKey(VK_ESCAPE,false);
  until=GetTickCount()+1000;
  while(GetTickCount()<until && gSelfCapturedCode==0) {
-  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
   Sleep(5);
  }
  if(gSelfCapturedCode!=VK_ESCAPE) {
@@ -1812,7 +1819,7 @@ static int SelfTest() {
  SendTestKey(VK_LSHIFT,false);
  until=GetTickCount()+1000;
  while(GetTickCount()<until && gSelfOutputEvents.size()<2) {
-  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
   Sleep(5);
  }
  gSelfObserveOutput=false;
@@ -1833,14 +1840,14 @@ static int SelfTest() {
  SendTestKey('C',true);
  until=GetTickCount()+100;
  while(GetTickCount()<until) {
-  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
   Sleep(2);
  }
  SetRemappingEnabled(true);
  SendTestKey('C',false);
  until=GetTickCount()+250;
  while(GetTickCount()<until) {
-  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
   Sleep(2);
  }
  gSelfObserveOutput=false;
