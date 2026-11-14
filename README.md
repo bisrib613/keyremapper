@@ -1,33 +1,59 @@
 # Key Remapper — native clean-room rebuild
 
-This repository contains a native Win32 x86 implementation. The previous .NET self-contained prototype was removed because it produced an unnecessarily large installer and did not match the reference application's architecture.
+Key Remapper is a native Win32 x86 keyboard/mouse remapper. It is intentionally small, per-user, and does not bundle .NET, a service, a driver, or a helper process.
 
-## Audit of the reference installer
+## Current build — v1.7.0
 
-The supplied reference installer is Inno Setup 5.5.7. Its main payload is a native x86 `keyremapper.exe`, not a .NET application. The payload executable is packed/protected, so this project does not copy proprietary source code, licensing, or protection logic. It is a clean-room implementation of the remapping behavior.
+Runtime behavior:
+- Closing the dashboard hides it to the system tray.
+- Tray menu: Open, Enable Remapping, Preferences > Run at startup / Reset Defaults, Exit.
+- Run at startup launches the app hidden to the tray.
+- Exit releases active synthetic input, removes both low-level hooks, removes the tray icon, and terminates the single process.
+- If Explorer restarts, the tray icon is registered again.
+- If a tray icon cannot be created, the app does not hide itself into an inaccessible state.
 
-## Current native build
+Remapping:
+- Keyboard key to keyboard key.
+- Keyboard key to mouse button or wheel action.
+- Mouse button or wheel action to keyboard or mouse action.
+- Source and target modifier combinations.
+- Modifier keys can themselves be mapping sources.
+- Capture supports ordinary keys, mouse input, Escape, and modifier-only input.
+- Block a source input.
+- Pause/resume without leaving synthetic keys held.
+- Symbol choices are resolved from the active Windows keyboard layout rather than a hard-coded US layout.
+- Input injection failures are surfaced in the runtime status.
 
-- Close button hides the dashboard to the system tray
-- Tray menu: Open, Enable Remapping, Preferences > Run at startup / Reset Defaults, Exit
-- Windows startup launches hidden to tray
-- Exit unloads hooks, removes the tray icon, and terminates the single process
+Persistence:
+- Mappings live in `%APPDATA%\KeyRemapperClean\mappings.txt`.
+- v1.7 uses a validated versioned config format and migrates legacy v1.x mapping files automatically.
+- Writes are temp-file + replace, with a validated last-known-good backup in `mappings.bak`.
+- A corrupt primary config is recovered from a valid backup instead of silently becoming an empty mapping set.
 
-- Keyboard key to keyboard key
-- Keyboard key to mouse button or wheel action
-- Mouse button or wheel action to keyboard or mouse action
-- Block a source input
-- Capture source/target directly from keyboard or mouse
-- Pause/resume
-- Persistent mappings in `%APPDATA%\KeyRemapperClean\mappings.txt`
-- Low-level keyboard and mouse hooks
-- Injected-output suppression to prevent remap loops
-- CI smoke test checks that both low-level hooks can be installed
+Desktop behavior:
+- Single process only; no service, driver, daemon, or scheduled remapping task.
+- Per-Monitor V2 DPI-aware layout.
+- Run at startup is stored per-user under HKCU and removed on uninstall.
+- The installer uses Inno Setup and does not require administrator elevation.
 
-## Installer
+## Build and test
 
-GitHub Actions builds `KeyRemapper_Setup.exe` with MSVC x86 and Inno Setup, then publishes it to GitHub Releases. It is an installer, not a portable build, and it does not bundle the .NET runtime.
+GitHub Actions builds two executables from the same tagged source:
+- `KeyRemapper.exe`: production binary.
+- `KeyRemapperTests.exe`: isolated regression build.
 
-## Current scope
+The test build uses its own temporary config directory and a separate `KeyRemapper.Test` startup registry value. Production does not expose the old `--self-test` path.
 
-Version 1.6.0 is focused on a stable native remapping core plus tray-first desktop behavior. It is not yet full feature parity with the reference application. Profiles, per-application rules, modifier combinations, double-press timing, folders, and tray behavior will be added after the core keyboard/mouse hook path is validated on real Windows hardware.
+The regression suite covers symbol mappings, upsert/modify, persistence recovery, dropdown wheel behavior, startup state, keyboard/mouse hooks, modifier-only and Escape capture, modifier-source mappings, safe pause while a target is held, and key-up behavior after remapping is re-enabled.
+
+Releases are tag-driven. `VERSION`, installer metadata, PE version resources, and the application manifest must agree before CI will publish an immutable release asset.
+
+## Known platform limitation
+
+The app runs as the current user with `asInvoker`. Windows may block `SendInput` into a higher-integrity/elevated application because of UIPI. The app reports an injection failure instead of silently claiming success.
+
+Release binaries are currently not Authenticode-signed. Code signing requires a trusted signing certificate and is intentionally not faked or bypassed.
+
+## Reference implementation note
+
+The supplied reference installer uses Inno Setup and contains a native x86 payload. This repository is a clean-room implementation of the observed remapping behavior; it does not copy proprietary source code, licensing, or protection logic.
