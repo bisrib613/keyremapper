@@ -915,6 +915,142 @@ static void RemoveMap() {
  Save();
  Refresh();
 }
+
+static void UpdateTrayIconState() {
+ if(!gTrayAdded) return;
+ gTray.uFlags=NIF_TIP;
+ const wchar_t* state=(!gKeyboard||!gMouse)?L"Hook unavailable":(gPaused?L"Remapping disabled":L"Remapping enabled");
+ std::wstring tip=L"Key Remapper - ";
+ tip+=state;
+ lstrcpynW(gTray.szTip,tip.c_str(),ARRAYSIZE(gTray.szTip));
+ Shell_NotifyIconW(NIM_MODIFY,&gTray);
+}
+
+static bool AddTrayIcon(HWND owner) {
+ if(gTrayAdded) return true;
+ ZeroMemory(&gTray,sizeof(gTray));
+ gTray.cbSize=sizeof(gTray);
+ gTray.hWnd=owner;
+ gTray.uID=TRAY_ID;
+ gTray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;
+ gTray.uCallbackMessage=WM_KR_TRAY;
+ gTray.hIcon=gIconSmall?gIconSmall:gIconLarge;
+ lstrcpynW(gTray.szTip,L"Key Remapper - Remapping enabled",ARRAYSIZE(gTray.szTip));
+ if(!Shell_NotifyIconW(NIM_ADD,&gTray)) return false;
+ gTrayAdded=true;
+ UpdateTrayIconState();
+ return true;
+}
+
+static void RemoveTrayIcon() {
+ if(!gTrayAdded) return;
+ Shell_NotifyIconW(NIM_DELETE,&gTray);
+ gTrayAdded=false;
+ ZeroMemory(&gTray,sizeof(gTray));
+}
+
+static void ShowDashboard() {
+ if(!gWnd) return;
+ ShowWindow(gWnd,SW_SHOW);
+ if(IsIconic(gWnd)) ShowWindow(gWnd,SW_RESTORE);
+ SetForegroundWindow(gWnd);
+}
+
+static void HideDashboard() {
+ if(gWnd) ShowWindow(gWnd,SW_HIDE);
+}
+
+static bool ApplyRunAtStartup(bool enabled) {
+ if(!SetStartupEnabled(enabled)) return false;
+ gRunAtStartup=enabled;
+ if(gStartup) InvalidateRect(gStartup,nullptr,TRUE);
+ return true;
+}
+
+static void ResetDefaults() {
+ int answer=MessageBoxW(gWnd,
+  L"Clear all mappings and restore remapping defaults?\n\nRun at startup will not be changed.",
+  L"Reset Defaults",MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2);
+ if(answer!=IDYES) return;
+
+ gMaps.clear();
+ gEditingIndex=-1;
+ gSourceUiMods=0;
+ gTargetUiMods=0;
+ SetBlockSourceState(false);
+ SetRemappingEnabled(true);
+ SelectChoice(gSource,gSourceChoices,VK_CAPITAL,0);
+ SelectChoice(gTarget,gTargetChoices,VK_ESCAPE,0);
+ Save();
+ ResetEditorState();
+ Refresh();
+ InvalidateRect(gWnd,nullptr,TRUE);
+}
+
+static void ExitApplication() {
+ if(!gWnd) return;
+ gExitRequested=true;
+ DestroyWindow(gWnd);
+}
+
+static void ExecuteTrayCommand(UINT command) {
+ switch(command) {
+  case ID_TRAY_OPEN:
+   ShowDashboard();
+   break;
+  case ID_TRAY_ENABLE:
+   SetRemappingEnabled(gPaused);
+   Refresh();
+   InvalidateRect(gWnd,nullptr,TRUE);
+   UpdateTrayIconState();
+   break;
+  case ID_TRAY_STARTUP: {
+   bool next=!gRunAtStartup;
+   if(!ApplyRunAtStartup(next) && gStatus)
+    SetWindowTextW(gStatus,L"Could not update Run at startup");
+   break;
+  }
+  case ID_TRAY_RESET:
+   ShowDashboard();
+   ResetDefaults();
+   break;
+  case ID_TRAY_EXIT:
+   ExitApplication();
+   break;
+ }
+}
+
+static void ShowTrayMenu() {
+ HMENU root=CreatePopupMenu();
+ HMENU prefs=CreatePopupMenu();
+ if(!root||!prefs) {
+  if(prefs) DestroyMenu(prefs);
+  if(root) DestroyMenu(root);
+  return;
+ }
+
+ AppendMenuW(root,MF_STRING,ID_TRAY_OPEN,L"Open");
+ AppendMenuW(root,MF_SEPARATOR,0,nullptr);
+ AppendMenuW(root,MF_STRING|(!gPaused?MF_CHECKED:MF_UNCHECKED),ID_TRAY_ENABLE,L"Enable Remapping");
+ AppendMenuW(root,MF_SEPARATOR,0,nullptr);
+
+ AppendMenuW(prefs,MF_STRING|(gRunAtStartup?MF_CHECKED:MF_UNCHECKED),ID_TRAY_STARTUP,L"Run at startup");
+ AppendMenuW(prefs,MF_STRING,ID_TRAY_RESET,L"Reset Defaults");
+ AppendMenuW(root,MF_POPUP,(UINT_PTR)prefs,L"Preferences");
+
+ AppendMenuW(root,MF_SEPARATOR,0,nullptr);
+ AppendMenuW(root,MF_STRING,ID_TRAY_EXIT,L"Exit");
+ SetMenuDefaultItem(root,ID_TRAY_OPEN,FALSE);
+
+ POINT pt{};
+ GetCursorPos(&pt);
+ SetForegroundWindow(gWnd);
+ UINT cmd=TrackPopupMenu(root,TPM_RETURNCMD|TPM_RIGHTBUTTON|TPM_NONOTIFY,
+                        pt.x,pt.y,0,gWnd,nullptr);
+ PostMessageW(gWnd,WM_NULL,0,0);
+ DestroyMenu(root);
+ if(cmd) ExecuteTrayCommand(cmd);
+}
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  switch(m) {
   case WM_CREATE:
