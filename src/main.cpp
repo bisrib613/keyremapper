@@ -1621,21 +1621,40 @@ static int SelfTest() {
                 (gMaps[0].dstMods&KRM_SHIFT)!=0 && wcscmp(upsertTarget,L"@")==0);
  if(!upsertOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 28; }
 
- // Persistence regression: save, reload, then recover from permanent backup.
- Save();
+ // Persistence regression: reload, recover corrupt primary, and preserve last-known-good backup.
+ if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
  gMaps.clear();
- Load();
+ if(!Load()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
  bool reloadOk=(gMaps.size()==1 && gMaps[0].target=='2' && (gMaps[0].dstMods&KRM_SHIFT)!=0);
  if(!reloadOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 29; }
 
  CopyFileW(ConfigPath().c_str(),ConfigBackupPath().c_str(),FALSE);
- DeleteFileW(ConfigPath().c_str());
+ {
+  std::wofstream bad(ConfigPath(),std::ios::trunc);
+  bad<<L"this is corrupt";
+ }
  gMaps.clear();
- Load();
- bool recoveryOk=(gMaps.size()==1 && gMaps[0].target=='2' &&
-                  (gMaps[0].dstMods&KRM_SHIFT)!=0 &&
-                  GetFileAttributesW(ConfigPath().c_str())!=INVALID_FILE_ATTRIBUTES);
+ bool recovered=Load();
+ bool recoveryOk=recovered && gMaps.size()==1 && gMaps[0].target=='2' &&
+                 (gMaps[0].dstMods&KRM_SHIFT)!=0;
  if(!recoveryOk) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 30; }
+
+ // A corrupt primary must never overwrite a healthy backup during the next save.
+ {
+  std::wofstream bad(ConfigPath(),std::ios::trunc);
+  bad<<L"still corrupt";
+ }
+ gMaps.clear();
+ gMaps.push_back({'C','D',false,0,0});
+ if(!Save()) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
+ std::vector<Mapping> backupMaps;
+ bool backupPreserved=ReadMappingsFile(ConfigBackupPath(),backupMaps)==ConfigReadResult::Valid &&
+                      backupMaps.size()==1 && backupMaps[0].target=='2' &&
+                      (backupMaps[0].dstMods&KRM_SHIFT)!=0;
+ if(!backupPreserved) { DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 34; }
+
+ gMaps=backupMaps;
+ WriteMappingsFile(ConfigPath(),gMaps);
  Refresh();
 
  // Modify regression: select the row, load it, change target to #, then save.
@@ -1692,9 +1711,39 @@ static int SelfTest() {
   }
   Sleep(5);
  }
- bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&KRM_SHIFT)!=0);
+ auto isShiftVk=[](int vk){return vk==VK_SHIFT||vk==VK_LSHIFT||vk==VK_RSHIFT;};
+  bool captureOk=(gSelfCapturedCode=='2' && (gSelfCapturedMods&KRM_SHIFT)!=0);
  if(!captureOk) {
   Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 22;
+ }
+
+ // Modifier-only capture must complete on modifier release without leaking the key to Windows.
+ gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0;
+ gCaptureSource=true; gCaptureTarget=false; gCaptureModifierCandidate=0; gCaptureSuppressedMods=0;
+ SendTestKey(VK_LSHIFT,true);
+ SendTestKey(VK_LSHIFT,false);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfCapturedCode==0) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+  Sleep(5);
+ }
+ bool modifierCaptureOk=isShiftVk(gSelfCapturedCode) && gSelfCapturedMods==0;
+ if(!modifierCaptureOk) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 35;
+ }
+
+ // Escape is a valid capturable key, not an implicit cancel key.
+ gSelfCapturedCode=0; gSelfCapturedMods=0; gPhysicalMods=0;
+ gCaptureSource=false; gCaptureTarget=true; gCaptureSwallow=0;
+ SendTestKey(VK_ESCAPE,true);
+ SendTestKey(VK_ESCAPE,false);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfCapturedCode==0) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  Sleep(5);
+ }
+ if(gSelfCapturedCode!=VK_ESCAPE) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 36;
  }
 
  // Runtime emission test: A must produce Shift+2, not bare 2.
@@ -1711,7 +1760,6 @@ static int SelfTest() {
   Sleep(5);
  }
  gSelfObserveOutput=false;
- auto isShiftVk=[](int vk){return vk==VK_SHIFT||vk==VK_LSHIFT||vk==VK_RSHIFT;};
  bool outputOk=false;
  for(size_t i=0;i+3<gSelfOutputEvents.size();++i) {
   if(isShiftVk(gSelfOutputEvents[i].vk) && gSelfOutputEvents[i].down &&
@@ -1755,6 +1803,51 @@ static int SelfTest() {
  SetRemappingEnabled(true);
  if(!(releasedOk&&sawRelease)) {
   Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 33;
+ }
+
+ // A modifier key can be a source without requiring itself in srcMods.
+ gMaps.clear(); gMaps.push_back({VK_LSHIFT,'A',false,0,0});
+ gPhysicalMods=0; gPaused=false; gSelfOutputEvents.clear(); gSelfObserveOutput=true;
+ SendTestKey(VK_LSHIFT,true);
+ SendTestKey(VK_LSHIFT,false);
+ until=GetTickCount()+1000;
+ while(GetTickCount()<until && gSelfOutputEvents.size()<2) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  Sleep(5);
+ }
+ gSelfObserveOutput=false;
+ bool modifierSourceOk=false;
+ for(size_t i=0;i+1<gSelfOutputEvents.size();++i) {
+  if(gSelfOutputEvents[i].vk=='A' && gSelfOutputEvents[i].down &&
+     gSelfOutputEvents[i+1].vk=='A' && !gSelfOutputEvents[i+1].down) {
+    modifierSourceOk=true; break;
+  }
+ }
+ if(!modifierSourceOk) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 37;
+ }
+
+ // Releasing a key that was pressed while remapping was disabled must not synthesize a target.
+ gMaps.clear(); gMaps.push_back({'C','D',false,0,0});
+ SetRemappingEnabled(false); gSelfOutputEvents.clear(); gSelfObserveOutput=true;
+ SendTestKey('C',true);
+ until=GetTickCount()+100;
+ while(GetTickCount()<until) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  Sleep(2);
+ }
+ SetRemappingEnabled(true);
+ SendTestKey('C',false);
+ until=GetTickCount()+250;
+ while(GetTickCount()<until) {
+  while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) { TranslateMessageW(&msg); DispatchMessageW(&msg); }
+  Sleep(2);
+ }
+ gSelfObserveOutput=false;
+ bool unexpectedTarget=false;
+ for(const auto&e:gSelfOutputEvents) if(e.vk=='D') unexpectedTarget=true;
+ if(unexpectedTarget) {
+  Unhook(); DestroyWindow(gWnd); gWnd=nullptr; gSelfTestMode=false; return 38;
  }
 
  Unhook();
