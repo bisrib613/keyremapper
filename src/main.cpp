@@ -828,7 +828,8 @@ static void DrawRoundedRect(HDC dc,const RECT& r,COLORREF fill,COLORREF border,i
  HPEN pen=CreatePen(PS_SOLID,1,border);
  HGDIOBJ oldBrush=SelectObject(dc,brush);
  HGDIOBJ oldPen=SelectObject(dc,pen);
- RoundRect(dc,r.left,r.top,r.right,r.bottom,radius,radius);
+ int scaledRadius=S(radius);
+ RoundRect(dc,r.left,r.top,r.right,r.bottom,scaledRadius,scaledRadius);
  SelectObject(dc,oldBrush);
  SelectObject(dc,oldPen);
  DeleteObject(brush);
@@ -867,15 +868,16 @@ static void DrawSwitchControl(const DRAWITEMSTRUCT* d) {
  RECT r=d->rcItem;
  bool checked=(d->CtlID==ID_BLOCK)?gBlockSource:gRunAtStartup;
  bool disabled=(d->itemState&ODS_DISABLED)!=0;
- int trackW=34,trackH=18;
+ int trackW=S(34),trackH=S(18);
  RECT track{r.left,r.top+(r.bottom-r.top-trackH)/2,r.left+trackW,r.top+(r.bottom-r.top+trackH)/2};
  COLORREF trackFill=checked?C_ACCENT:RGB(207,211,219);
  if(disabled) trackFill=RGB(225,227,232);
  DrawRoundedRect(d->hDC,track,trackFill,trackFill,trackH);
 
- int knob=14;
- int knobX=checked?track.right-knob-2:track.left+2;
- RECT k{knobX,track.top+2,knobX+knob,track.top+2+knob};
+ int knob=S(14);
+ int inset=S(2);
+ int knobX=checked?track.right-knob-inset:track.left+inset;
+ RECT k{knobX,track.top+inset,knobX+knob,track.top+inset+knob};
  HBRUSH kb=CreateSolidBrush(RGB(255,255,255));
  HPEN kp=CreatePen(PS_SOLID,1,RGB(255,255,255));
  HGDIOBJ ob=SelectObject(d->hDC,kb),op=SelectObject(d->hDC,kp);
@@ -884,7 +886,7 @@ static void DrawSwitchControl(const DRAWITEMSTRUCT* d) {
 
  wchar_t label[96]{};
  GetWindowTextW(d->hwndItem,label,96);
- RECT tr=r;tr.left=track.right+10;
+ RECT tr=r;tr.left=track.right+S(10);
  SetBkMode(d->hDC,TRANSPARENT);
  SetTextColor(d->hDC,disabled?RGB(160,165,174):C_TEXT);
  HFONT old=(HFONT)SelectObject(d->hDC,gFontSmall?gFontSmall:GetStockObject(DEFAULT_GUI_FONT));
@@ -942,7 +944,7 @@ static void DrawOwnerCombo(const DRAWITEMSTRUCT* d) {
 
  wchar_t buf[128]{};
  SendMessageW(d->hwndItem,CB_GETLBTEXT,d->itemID,(LPARAM)buf);
- r.left+=10;r.right-=8;
+ r.left+=S(10);r.right-=S(8);
  SetBkMode(d->hDC,TRANSPARENT);
  SetTextColor(d->hDC,C_TEXT);
  HFONT old=(HFONT)SelectObject(d->hDC,gFontBody?gFontBody:GetStockObject(DEFAULT_GUI_FONT));
@@ -1311,10 +1313,23 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    InvalidateRect(h,nullptr,TRUE);
    return 0;
 
+  case WM_DPICHANGED: {
+   gDpi=HIWORD(w);
+   auto* suggested=reinterpret_cast<RECT*>(l);
+   SetWindowPos(h,nullptr,suggested->left,suggested->top,
+                suggested->right-suggested->left,suggested->bottom-suggested->top,
+                SWP_NOZORDER|SWP_NOACTIVATE);
+   RecreateFonts(h);
+   RECT rc{}; GetClientRect(h,&rc);
+   LayoutUi(rc.right,rc.bottom);
+   InvalidateRect(h,nullptr,TRUE);
+   return 0;
+  }
+
   case WM_GETMINMAXINFO: {
    auto* info=reinterpret_cast<MINMAXINFO*>(l);
-   info->ptMinTrackSize.x=760;
-   info->ptMinTrackSize.y=560;
+   info->ptMinTrackSize.x=S(760);
+   info->ptMinTrackSize.y=S(560);
    return 0;
   }
 
@@ -1323,16 +1338,16 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
    HDC dc=BeginPaint(h,&ps);
    RECT client{};GetClientRect(h,&client);
 
-   RECT editor{20,70,client.right-20,252};
-   RECT mappings{20,264,client.right-20,client.bottom-58};
+   RECT editor{S(20),S(70),client.right-S(20),S(252)};
+   RECT mappings{S(20),S(264),client.right-S(20),client.bottom-S(58)};
    DrawRoundedRect(dc,editor,C_SURFACE,C_BORDER,12);
    DrawRoundedRect(dc,mappings,C_SURFACE,C_BORDER,12);
 
-   int footerY=client.bottom-44;
+   int footerY=client.bottom-S(44);
    COLORREF statusColor=(!gKeyboard||!gMouse)?RGB(198,67,67):(gPaused?RGB(214,147,35):C_ACTIVE);
    HBRUSH dotBrush=CreateSolidBrush(statusColor);
    HGDIOBJ old=SelectObject(dc,dotBrush);
-   Ellipse(dc,184,footerY+8,192,footerY+16);
+   Ellipse(dc,S(184),footerY+S(8),S(192),footerY+S(16));
    SelectObject(dc,old);
    DeleteObject(dotBrush);
 
@@ -1343,7 +1358,7 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   case WM_MEASUREITEM: {
    auto* mi=reinterpret_cast<MEASUREITEMSTRUCT*>(l);
    if(mi->CtlID==ID_SOURCE || mi->CtlID==ID_TARGET) {
-    mi->itemHeight=28;
+    mi->itemHeight=S(28);
     return TRUE;
    }
    break;
@@ -1365,8 +1380,14 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l) {
     SetTextColor(dc,C_MUTED);
     return (LRESULT)gBrushBg;
    }
+   if(id==ID_SECTION || id==ID_EMPTY) {
+    SetBkMode(dc,OPAQUE);
+    SetBkColor(dc,C_SURFACE);
+    SetTextColor(dc,id==ID_SECTION?C_TEXT:C_MUTED);
+    return (LRESULT)gBrushSurface;
+   }
    SetBkMode(dc,TRANSPARENT);
-   if(id==ID_TITLE || id==ID_SECTION) SetTextColor(dc,C_TEXT);
+   if(id==ID_TITLE) SetTextColor(dc,C_TEXT);
    else SetTextColor(dc,C_MUTED);
    return (LRESULT)GetStockObject(HOLLOW_BRUSH);
   }
