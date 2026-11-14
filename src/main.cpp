@@ -461,17 +461,23 @@ static std::wstring StartupCommandValue() {
  RegCloseKey(key);
  return std::wstring(buf.data());
 }
+static std::wstring ExpectedStartupCommand() {
+ wchar_t exe[MAX_PATH]{};
+ if(!GetModuleFileNameW(nullptr,exe,MAX_PATH)) return L"";
+ return L"\""+std::wstring(exe)+L"\" --startup";
+}
 static bool StartupEnabled() {
- return !StartupCommandValue().empty();
+ std::wstring actual=StartupCommandValue();
+ std::wstring expected=ExpectedStartupCommand();
+ return !actual.empty() && !expected.empty() && _wcsicmp(actual.c_str(),expected.c_str())==0;
 }
 static bool SetStartupEnabled(bool enabled) {
  HKEY key=nullptr;
  if(RegCreateKeyExW(HKEY_CURRENT_USER,STARTUP_RUN_KEY,0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr)!=ERROR_SUCCESS) return false;
  LONG result=ERROR_SUCCESS;
  if(enabled) {
-  wchar_t exe[MAX_PATH]{};
-  if(!GetModuleFileNameW(nullptr,exe,MAX_PATH)) { RegCloseKey(key); return false; }
-  std::wstring command=L"\""+std::wstring(exe)+L"\" --startup";
+  std::wstring command=ExpectedStartupCommand();
+  if(command.empty()) { RegCloseKey(key); return false; }
   result=RegSetValueExW(key,StartupValueName(),0,REG_SZ,
     reinterpret_cast<const BYTE*>(command.c_str()),(DWORD)((command.size()+1)*sizeof(wchar_t)));
  } else {
