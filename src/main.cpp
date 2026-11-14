@@ -135,8 +135,9 @@ static std::vector<TestEvent> gSelfOutputEvents;
 static bool gSelfObserveOutput=false;
 constexpr ULONG_PTR TEST_MAGIC = 0x4B525453;
 static std::vector<Mapping> gMaps;
-struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; };
+struct ActiveEmission { int target=0; unsigned synthetic=0; unsigned suppressed=0; bool consumed=false; };
 static std::vector<ActiveEmission> gActive(0x1200);
+static DWORD gLastInjectionError=ERROR_SUCCESS;
 
 static std::wstring NameOf(int code) {
  for (auto &i:ITEMS) if(i.code==code) return i.name;
@@ -190,7 +191,7 @@ static bool Extended(int vk) {
   case VK_NUMLOCK:case VK_SNAPSHOT:case VK_DIVIDE:case VK_LWIN:case VK_RWIN:case VK_APPS:return true;
  } return false;
 }
-static void SendCode(int code,bool down) {
+static bool SendCode(int code,bool down) {
  INPUT in{}; in.type = code>=0x1000 ? INPUT_MOUSE : INPUT_KEYBOARD;
  if(code<0x1000) {
   in.ki.wVk=(WORD)code; in.ki.dwExtraInfo=KR_MAGIC;
@@ -204,12 +205,16 @@ static void SendCode(int code,bool down) {
    case MOUSE_MIDDLE:in.mi.dwFlags=down?MOUSEEVENTF_MIDDLEDOWN:MOUSEEVENTF_MIDDLEUP;break;
    case MOUSE_X1:in.mi.dwFlags=down?MOUSEEVENTF_XDOWN:MOUSEEVENTF_XUP;in.mi.mouseData=XBUTTON1;break;
    case MOUSE_X2:in.mi.dwFlags=down?MOUSEEVENTF_XDOWN:MOUSEEVENTF_XUP;in.mi.mouseData=XBUTTON2;break;
-   case WHEEL_UP:if(!down)return;in.mi.dwFlags=MOUSEEVENTF_WHEEL;in.mi.mouseData=WHEEL_DELTA;break;
-   case WHEEL_DOWN:if(!down)return;in.mi.dwFlags=MOUSEEVENTF_WHEEL;in.mi.mouseData=(DWORD)-WHEEL_DELTA;break;
-   default:return;
+   case WHEEL_UP:if(!down)return true;in.mi.dwFlags=MOUSEEVENTF_WHEEL;in.mi.mouseData=WHEEL_DELTA;break;
+   case WHEEL_DOWN:if(!down)return true;in.mi.dwFlags=MOUSEEVENTF_WHEEL;in.mi.mouseData=(DWORD)-WHEEL_DELTA;break;
+   default:return false;
   }
  }
- SendInput(1,&in,sizeof(in));
+ if(SendInput(1,&in,sizeof(in))!=1) {
+  gLastInjectionError=GetLastError();
+  return false;
+ }
+ return true;
 }
 static void SendTestKey(int vk,bool down) {
  INPUT in{};
@@ -220,46 +225,68 @@ static void SendTestKey(int vk,bool down) {
  SendInput(1,&in,sizeof(in));
 }
 static ActiveEmission BeginTarget(const Mapping& m) {
- ActiveEmission a{}; a.target=m.target;
+ ActiveEmission a{};
+ a.consumed=true;
+ a.target=m.target;
  unsigned all[]={KRM_SHIFT,KRM_CTRL,KRM_ALT,KRM_WIN};
  for(unsigned bit:all) {
   if((gPhysicalMods&bit) && !(m.dstMods&bit)) {
-   SendCode(VkForMod(bit),false); a.suppressed|=bit;
+   if(SendCode(VkForMod(bit),false)) a.suppressed|=bit;
   }
  }
  for(unsigned bit:all) {
   if((m.dstMods&bit) && !(gPhysicalMods&bit)) {
-   SendCode(VkForMod(bit),true); a.synthetic|=bit;
+   if(SendCode(VkForMod(bit),true)) a.synthetic|=bit;
   }
  }
- SendCode(m.target,true);
+ if(!SendCode(m.target,true)) {
+  for(unsigned bit:{KRM_WIN,KRM_ALT,KRM_CTRL,KRM_SHIFT})
+   if(a.synthetic&bit) SendCode(VkForMod(bit),false);
+  for(unsigned bit:{KRM_WIN,KRM_ALT,KRM_CTRL,KRM_SHIFT})
+   if((a.suppressed&bit)&&(gPhysicalMods&bit)) SendCode(VkForMod(bit),true);
+  a.target=0;
+ }
  return a;
 }
 static void EndTarget(const ActiveEmission& a) {
- if(!a.target)return;
- SendCode(a.target,false);
+ if(a.target) SendCode(a.target,false);
  unsigned all[]={KRM_WIN,KRM_ALT,KRM_CTRL,KRM_SHIFT};
  for(unsigned bit:all) if(a.synthetic&bit) SendCode(VkForMod(bit),false);
  for(unsigned bit:all) if((a.suppressed&bit)&&(gPhysicalMods&bit)) SendCode(VkForMod(bit),true);
 }
-static Mapping* FindMap(int src) {
+static Mapping* FindMap(int src,unsigned sourceMods) {
  if(gPaused) return nullptr;
- for(auto &m:gMaps) if(m.source==src && m.srcMods==gPhysicalMods) return &m;
+ for(auto &m:gMaps) if(m.source==src && m.srcMods==sourceMods) return &m;
  return nullptr;
 }
-static bool Handle(int src,bool down,bool pulse=false) {
+static bool Handle(int src,bool down,bool pulse=false,unsigned sourceMods=0) {
  unsigned modBit=ModBitForVk(src);
  if(gCaptureSource||gCaptureTarget) {
   if(modBit) return true;
   if(down||pulse) {
    bool sourceCapture=gCaptureSource; gCaptureSource=gCaptureTarget=false; gCaptureSwallow=pulse?0:src;
-   LPARAM packed=(LPARAM)((gPhysicalMods<<1)|(sourceCapture?0:1));
+   LPARAM packed=(LPARAM)((sourceMods<<1)|(sourceCapture?0:1));
    PostMessageW(gWnd,WM_KR_CAPTURE,src,packed); return true;
   }
   return false;
  }
  if(gCaptureSwallow==src) { if(!down)gCaptureSwallow=0; return true; }
- Mapping* m=FindMap(src); if(!m)return false; if(m->block)return true;
+
+ if(!pulse && src>=0 && src<(int)gActive.size() && !down) {
+  if(gActive[src].consumed) {
+   EndTarget(gActive[src]);
+   gActive[src]=ActiveEmission{};
+   return true;
+  }
+  return false;
+ }
+
+ Mapping* m=FindMap(src,sourceMods);
+ if(!m) return false;
+ if(m->block) {
+  if(!pulse && src>=0 && src<(int)gActive.size()) gActive[src].consumed=true;
+  return true;
+ }
  if(pulse) {
   ActiveEmission a=BeginTarget(*m);
   EndTarget(a);
@@ -267,14 +294,12 @@ static bool Handle(int src,bool down,bool pulse=false) {
  }
  if(src>=0 && src<(int)gActive.size()) {
   if(down) {
-   if(!gActive[src].target) gActive[src]=BeginTarget(*m);
-   else if(m->target<0x1000) SendCode(m->target,true);
-  } else {
-   if(gActive[src].target) { EndTarget(gActive[src]); gActive[src]=ActiveEmission{}; }
-   else { ActiveEmission a=BeginTarget(*m); EndTarget(a); }
+   if(!gActive[src].consumed) gActive[src]=BeginTarget(*m);
+   else if(gActive[src].target<0x1000 && gActive[src].target) SendCode(gActive[src].target,true);
   }
- } else {
-  if(down) { ActiveEmission a=BeginTarget(*m); gActive[0]=a; }
+ } else if(down) {
+  ActiveEmission a=BeginTarget(*m);
+  EndTarget(a);
  }
  return true;
 }
@@ -282,22 +307,31 @@ static LRESULT CALLBACK KeyHook(int n,WPARAM w,LPARAM l) {
  if(n<0)return CallNextHookEx(gKeyboard,n,w,l);
  auto*k=(KBDLLHOOKSTRUCT*)l;
  if(k->dwExtraInfo==KR_MAGIC) {
-  if(gSelfTestMode && gSelfObserveOutput) {
+#ifdef KRM_TEST_BUILD
+  if(gSelfObserveOutput) {
    bool od=w==WM_KEYDOWN||w==WM_SYSKEYDOWN;
    bool ou=w==WM_KEYUP||w==WM_SYSKEYUP;
    if(od||ou) gSelfOutputEvents.push_back({(int)k->vkCode,od});
   }
+#endif
   return CallNextHookEx(gKeyboard,n,w,l);
  }
- if((k->flags&LLKHF_INJECTED) && !gSelfTestMode)
-  return CallNextHookEx(gKeyboard,n,w,l);
+#ifndef KRM_TEST_BUILD
+ if(k->flags&LLKHF_INJECTED) return CallNextHookEx(gKeyboard,n,w,l);
+#endif
  bool d=w==WM_KEYDOWN||w==WM_SYSKEYDOWN,u=w==WM_KEYUP||w==WM_SYSKEYUP;
  if(!d&&!u) return CallNextHookEx(gKeyboard,n,w,l);
- unsigned bit=ModBitForVk((int)k->vkCode);
+
+ int vk=(int)k->vkCode;
+ unsigned bit=ModBitForVk(vk);
+ unsigned modsForMatch=gPhysicalMods;
+ bool consumed=Handle(vk,d,false,modsForMatch);
+
  if(bit) {
-  if(d) gPhysicalMods|=bit; else gPhysicalMods&=~bit;
+  if(d) gPhysicalMods|=bit;
+  else gPhysicalMods&=~bit;
  }
- if(Handle((int)k->vkCode,d))return 1;
+ if(consumed)return 1;
  return CallNextHookEx(gKeyboard,n,w,l);
 }
 static LRESULT CALLBACK MouseHook(int n,WPARAM w,LPARAM l) {
