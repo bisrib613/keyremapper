@@ -1,5 +1,5 @@
 #define AppName "Key Remapper"
-#define AppVersion "1.5.2"
+#define AppVersion "1.6.0"
 
 [Setup]
 AppId={{B0F2EDC4-65D9-4E6A-B8C4-23D41B532C6E}
@@ -17,6 +17,7 @@ UninstallDisplayIcon={app}\KeyRemapper.exe
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
+AppMutex=Local\KeyRemapper.SingleInstance
 SetupIconFile=..\assets\keyremapper.ico
 
 [Files]
@@ -33,3 +34,13 @@ Name: "{autodesktop}\Key Remapper"; Filename: "{app}\KeyRemapper.exe"; Tasks: de
 
 [Run]
 Filename: "{app}\KeyRemapper.exe"; Description: "Run Key Remapper"; Flags: nowait postinstall skipifsilent
+
+
+[Code]
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    RegDeleteValue(HKEY_CURRENT_USER,
+      'Software\Microsoft\Windows\CurrentVersion\Run',
+      'KeyRemapper');
+end;
