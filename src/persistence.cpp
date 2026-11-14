@@ -134,29 +134,63 @@ bool SaveMappings(const std::vector<Mapping>& maps) {
   return true;
 }
 
-bool LoadMappings(std::vector<Mapping>& maps) {
+bool LoadMappings(std::vector<Mapping>& maps,ConfigLoadStatus* status) {
+  auto setStatus=[&](ConfigLoadStatus value){ if(status) *status=value; };
   maps.clear();
+
   const std::wstring primary=ConfigPath();
   const std::wstring backup=ConfigBackupPath();
-  if(primary.empty()||backup.empty()) return false;
+  if(primary.empty()||backup.empty()) {
+    setStatus(ConfigLoadStatus::Invalid);
+    return false;
+  }
 
   std::vector<Mapping> parsed;
   ConfigReadResult primaryResult=ReadMappingsFile(primary,parsed);
   if(primaryResult==ConfigReadResult::Valid) {
     maps=std::move(parsed);
-    std::wifstream check(primary);
-    std::wstring first; std::getline(check,first);
-    if(first.rfind(L"KRM_CONFIG ",0)!=0 && !SaveMappings(maps)) return false;
+
+    bool versioned=false;
+    {
+      // Keep the probe handle scoped here. SaveMappings() must be able to
+      // replace mappings.txt immediately afterwards on Windows.
+      std::wifstream check(primary);
+      std::wstring first;
+      if(std::getline(check,first))
+        versioned=first.rfind(L"KRM_CONFIG ",0)==0;
+    }
+
+    if(!versioned) {
+      if(!SaveMappings(maps)) {
+        setStatus(ConfigLoadStatus::MigrationWriteFailed);
+        return true; // mappings are usable in memory even if migration could not be persisted
+      }
+      setStatus(ConfigLoadStatus::Migrated);
+      return true;
+    }
+
+    setStatus(ConfigLoadStatus::Ready);
     return true;
   }
 
   std::vector<Mapping> recovered;
   if(ReadMappingsFile(backup,recovered)==ConfigReadResult::Valid) {
     maps=std::move(recovered);
-    if(!WriteMappingsFile(primary,maps)) return false;
+    if(!WriteMappingsFile(primary,maps)) {
+      setStatus(ConfigLoadStatus::RecoveryWriteFailed);
+      return true; // recovered mappings remain usable for this process
+    }
+    setStatus(ConfigLoadStatus::Recovered);
     return true;
   }
-  return primaryResult==ConfigReadResult::Missing;
+
+  if(primaryResult==ConfigReadResult::Missing) {
+    setStatus(ConfigLoadStatus::Missing);
+    return true;
+  }
+
+  setStatus(ConfigLoadStatus::Invalid);
+  return false;
 }
 
 #ifdef KRM_TEST_BUILD
