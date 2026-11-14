@@ -83,6 +83,35 @@ jobs:
           path: dist/KeyRemapper_Setup.exe
           if-no-files-found: error
 
+  tag_release_commit:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create immutable version tag
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          tag="v${version}"
+          git fetch --tags --force
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            existing="$(git rev-list -n 1 "$tag")"
+            if [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "Tag $tag already points to $existing, refusing to move it from $GITHUB_SHA" >&2
+              exit 1
+            fi
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" "$GITHUB_SHA" -m "Key Remapper $tag"
+          git push origin "$tag"
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
