@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +24,18 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          $expected = "v" + ((Select-String -Path "installer/KeyRemapper.iss" -Pattern '#define AppVersion "([^"]+)"').Matches.Groups[1].Value)
+          $version = (Select-String -Path "installer/KeyRemapper.iss" -Pattern '#define AppVersion "([^"]+)"').Matches.Groups[1].Value
+          $expected = "v" + $version
           if ($tag -ne $expected) { throw "Tag $tag does not match installer version $expected" }
+          $parts = $version.Split('.')
+          $commaVersion = "$($parts[0]),$($parts[1]),$($parts[2]),0"
+          $dotVersion = "$version.0"
+          if (-not (Select-String -Path "src/resource.rc" -SimpleMatch "PRODUCTVERSION $commaVersion" -Quiet)) {
+            throw "resource.rc version does not match $version"
+          }
+          if (-not (Select-String -Path "src/app.manifest" -SimpleMatch "version=`"$dotVersion`"" -Quiet)) {
+            throw "app.manifest version does not match $version"
+          }
 
       - name: Build production and isolated test executables
         shell: cmd
@@ -35,8 +45,8 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars32.bat"
           if not exist build mkdir build
           rc /nologo /fo build\resource.res src\resource.rc
-          cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
-          cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /DKRM_TEST_BUILD /DUNICODE /D_UNICODE /Fe:build\KeyRemapperTests.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
+          cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /WX /DUNICODE /D_UNICODE /Fe:build\KeyRemapper.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
+          cl /nologo /std:c++17 /O2 /MT /EHsc /W4 /WX /wd4100 /wd4505 /DKRM_TEST_BUILD /DUNICODE /D_UNICODE /Fe:build\KeyRemapperTests.exe src\main.cpp build\resource.res user32.lib gdi32.lib comctl32.lib shell32.lib /link /DYNAMICBASE /NXCOMPAT /GUARD:CF
 
       - name: Run isolated regression suite
         shell: pwsh
