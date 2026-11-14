@@ -77,14 +77,7 @@ static const Item ITEMS[] = {
  {MOUSE_X1,L"Mouse X1"},{MOUSE_X2,L"Mouse X2"},{WHEEL_UP,L"Wheel Up"},{WHEEL_DOWN,L"Wheel Down"}
 };
 
-struct SymbolItem { int code; const wchar_t* name; };
-static const SymbolItem SYMBOL_ITEMS[] = {
- {'1',L"!"},{'2',L"@"},{'3',L"#"},{'4',L"$"},{'5',L"%"},{'6',L"^"},
- {'7',L"&"},{'8',L"*"},{'9',L"("},{'0',L")"},
- {VK_OEM_MINUS,L"_"},{VK_OEM_PLUS,L"+"},{VK_OEM_4,L"{"},{VK_OEM_6,L"}"},
- {VK_OEM_5,L"|"},{VK_OEM_1,L":"},{VK_OEM_7,L"\""},{VK_OEM_COMMA,L"<"},
- {VK_OEM_PERIOD,L">"},{VK_OEM_2,L"?"},{VK_OEM_3,L"~"}
-};
+static const wchar_t SYMBOL_CHARS[] = L"!@#$%^&*()_+{}|:\\\"<>?~";
 struct Mapping { int source; int target; bool block; unsigned srcMods=0; unsigned dstMods=0; };
 struct Choice { int code=0; unsigned mods=0; };
 static std::vector<Choice> gSourceChoices;
@@ -170,29 +163,34 @@ static int VkForMod(unsigned bit) {
  if(bit==KRM_WIN) return VK_LWIN;
  return 0;
 }
-static const wchar_t* ShiftSymbol(int code) {
- switch(code) {
-  case '1': return L"!"; case '2': return L"@"; case '3': return L"#"; case '4': return L"$";
-  case '5': return L"%"; case '6': return L"^"; case '7': return L"&"; case '8': return L"*";
-  case '9': return L"("; case '0': return L")"; case VK_OEM_1: return L":";
-  case VK_OEM_PLUS: return L"+"; case VK_OEM_COMMA: return L"<"; case VK_OEM_MINUS: return L"_";
-  case VK_OEM_PERIOD: return L">"; case VK_OEM_2: return L"?"; case VK_OEM_3: return L"~";
-  case VK_OEM_4: return L"{"; case VK_OEM_5: return L"|"; case VK_OEM_6: return L"}";
-  case VK_OEM_7: return L"\"";
-  default: return nullptr;
+static bool ChoiceForSymbol(wchar_t ch,Choice& out) {
+ SHORT encoded=VkKeyScanExW(ch,GetKeyboardLayout(0));
+ if(encoded==-1) return false;
+ int vk=LOBYTE(encoded);
+ BYTE shiftState=HIBYTE(encoded);
+ unsigned mods=0;
+ if(shiftState&1) mods|=KRM_SHIFT;
+ if(shiftState&2) mods|=KRM_CTRL;
+ if(shiftState&4) mods|=KRM_ALT;
+ if(shiftState&~7) return false;
+ out={vk,mods};
+ return vk!=0;
+}
+static wchar_t SymbolCharForKey(int code,unsigned mods) {
+ for(const wchar_t* p=SYMBOL_CHARS;*p;++p) {
+  Choice c{};
+  if(ChoiceForSymbol(*p,c) && c.code==code && c.mods==mods) return *p;
  }
+ return 0;
 }
 static std::wstring Describe(int code,unsigned mods) {
+ if(wchar_t symbol=SymbolCharForKey(code,mods)) return std::wstring(1,symbol);
  std::wstring out;
  if(mods&KRM_CTRL) out+=L"Ctrl+";
  if(mods&KRM_ALT) out+=L"Alt+";
  if(mods&KRM_WIN) out+=L"Win+";
- const wchar_t* symbol=((mods&KRM_SHIFT)?ShiftSymbol(code):nullptr);
- if(symbol) out+=symbol;
- else {
-  if(mods&KRM_SHIFT) out+=L"Shift+";
-  out+=NameOf(code);
- }
+ if(mods&KRM_SHIFT) out+=L"Shift+";
+ out+=NameOf(code);
  return out;
 }
 static bool Extended(int vk) {
@@ -679,14 +677,17 @@ static void SelectChoice(HWND h,const std::vector<Choice>& choices,int code,unsi
 static void FillCombo(HWND h,std::vector<Choice>& choices) {
  ComboBox_ResetContent(h);
  choices.clear();
- choices.reserve((sizeof(ITEMS)/sizeof(ITEMS[0]))+(sizeof(SYMBOL_ITEMS)/sizeof(SYMBOL_ITEMS[0])));
+ choices.reserve((sizeof(ITEMS)/sizeof(ITEMS[0]))+wcslen(SYMBOL_CHARS));
  for(auto&i:ITEMS) {
   ComboBox_AddString(h,i.name);
   choices.push_back({i.code,0});
  }
- for(auto&i:SYMBOL_ITEMS) {
-  ComboBox_AddString(h,i.name);
-  choices.push_back({i.code,KRM_SHIFT});
+ for(const wchar_t* p=SYMBOL_CHARS;*p;++p) {
+  Choice c{};
+  if(!ChoiceForSymbol(*p,c)) continue;
+  wchar_t label[2]{*p,0};
+  ComboBox_AddString(h,label);
+  choices.push_back(c);
  }
 }
 static unsigned CheckedMods(HWND sh,HWND,HWND,HWND) {
@@ -733,7 +734,7 @@ static void SetBlockSourceState(bool enabled) {
  if(gDstWin) EnableWindow(gDstWin,targetEnabled);
 }
 static unsigned PreferredImpliedMods(int code,unsigned mods) {
- return ((mods&KRM_SHIFT) && ShiftSymbol(code)) ? KRM_SHIFT : 0;
+ return SymbolCharForKey(code,mods)?mods:0;
 }
 static int SelectedMappingIndex() {
  int row=ListView_GetNextItem(gList,-1,LVNI_SELECTED);
