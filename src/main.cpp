@@ -597,7 +597,7 @@ static bool Load() {
   // Migrate legacy content to the versioned format on first successful load.
   std::wifstream check(primary);
   std::wstring first; std::getline(check,first);
-  if(first.rfind(L"KRM_CONFIG ",0)!=0) Save();
+  if(first.rfind(L"KRM_CONFIG ",0)!=0 && !Save()) return false;
   return true;
  }
 
